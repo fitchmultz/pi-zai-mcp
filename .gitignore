@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+*.tgz
+npm-debug.log*
+
+# Local pi wiring (tracked wrapper file is negated below)
+.pi/*
+!.pi/extensions/
+.pi/extensions/*
+!.pi/extensions/zai-mcp.ts
