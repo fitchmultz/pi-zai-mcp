@@ -6,7 +6,7 @@
   "author": "Mitch Fultz (https://github.com/fitchmultz)",
   "license": "MIT",
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=22 <25"
   },
   "keywords": [
     "pi-package",
@@ -57,5 +57,5 @@
       "./extensions/zai-mcp.ts"
     ]
   },
-  "packageManager": "npm@11.15.0"
+  "packageManager": "npm@11.0.0"
 }
