@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.3 - 2026-05-27
+
+### Changed
+- Updated the local pi package baseline to `@earendil-works/*` `0.76.0` and regenerated the npm lockfile.
+- Reviewed the pi `0.76.0` changelog; no extension API migrations were required.
+
 ## 0.1.2 - 2026-05-23
 
 ### Changed
