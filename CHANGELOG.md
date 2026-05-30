@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Changed
+- Updated the local pi package baseline to `@earendil-works/*` `0.78.0` and regenerated the npm lockfile.
+- Aligned Node.js engine range to `>=22 <25` and pinned `packageManager` to `npm@11.0.0`.
+- Reviewed the pi `0.78.0` changelog; no extension API migrations were required.
+
 ## 0.1.4 - 2026-05-28
 
 ### Changed
