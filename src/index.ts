@@ -9,18 +9,26 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Type } from "typebox";
-import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const EXTENSION_NAME = "pi-zai-mcp";
-const EXTENSION_VERSION = "0.1.0";
+const EXTENSION_VERSION = "0.1.5";
 const VISION_MCP_PACKAGE = "@z_ai/mcp-server";
-const VISION_MCP_VERSION = "0.1.4";
 const VISION_MCP_BIN = "zai-mcp-server";
+const require = createRequire(import.meta.url);
 const DEFAULT_TIMEOUT_MS = positiveIntegerFromEnv("Z_AI_MCP_TIMEOUT_MS", 30_000);
+
+function stringEnum<const T extends readonly string[]>(values: T, options?: { description?: string; default?: T[number] }) {
+  return Type.Unsafe<T[number]>({
+    type: "string",
+    enum: [...values],
+    ...(options?.description ? { description: options.description } : {}),
+    ...(options?.default ? { default: options.default } : {}),
+  });
+}
 
 type ServerKind = "http" | "stdio";
 
@@ -49,10 +57,12 @@ type McpTool = {
   inputSchema?: Record<string, unknown>;
 };
 
+const SERVER_ID_SCHEMA = stringEnum(["search", "reader", "zread", "vision"] as const, {
+  description: "Z.ai MCP server id: search, reader, zread, or vision.",
+});
+
 const GENERIC_CALL_SCHEMA = Type.Object({
-  server: Type.String({
-    description: "Z.ai MCP server id: search, reader, zread, or vision.",
-  }),
+  server: SERVER_ID_SCHEMA,
   tool: Type.String({ description: "Exact MCP tool name to call." }),
   arguments: Type.Optional(
     Type.Record(Type.String(), Type.Any(), {
@@ -62,11 +72,7 @@ const GENERIC_CALL_SCHEMA = Type.Object({
 });
 
 const LIST_TOOLS_SCHEMA = Type.Object({
-  server: Type.Optional(
-    Type.String({
-      description: "Optional Z.ai MCP server id to inspect: search, reader, zread, or vision.",
-    }),
-  ),
+  server: Type.Optional(SERVER_ID_SCHEMA),
 });
 
 function positiveIntegerFromEnv(name: string, fallback: number): number {
@@ -106,19 +112,16 @@ function environment(): Record<string, string> {
 }
 
 function resolveVisionServerCommand(): { command: string; args: string[] } {
-  const binName = process.platform === "win32" ? `${VISION_MCP_BIN}.cmd` : VISION_MCP_BIN;
-  const extensionDir = dirname(fileURLToPath(import.meta.url));
-  const localCandidates = [
-    resolve(extensionDir, "..", "node_modules", ".bin", binName),
-    resolve(extensionDir, "..", "..", "node_modules", ".bin", binName),
-  ];
-  const localBin = localCandidates.find((candidate) => existsSync(candidate));
+  const packageJsonPath = require.resolve(`${VISION_MCP_PACKAGE}/package.json`);
+  const packageRoot = dirname(packageJsonPath);
+  const packageJson = require(packageJsonPath) as { bin?: string | Record<string, string> };
+  const binPath = typeof packageJson.bin === "string" ? packageJson.bin : packageJson.bin?.[VISION_MCP_BIN];
 
-  if (localBin) return { command: localBin, args: [] };
+  if (!binPath) throw new Error(`${VISION_MCP_PACKAGE} does not declare the ${VISION_MCP_BIN} binary.`);
 
   return {
-    command: "npx",
-    args: ["-y", `${VISION_MCP_PACKAGE}@${VISION_MCP_VERSION}`],
+    command: process.execPath,
+    args: [resolve(packageRoot, binPath)],
   };
 }
 

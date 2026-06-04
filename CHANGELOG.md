@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.5 - 2026-06-04
+
+### Changed
+- Updated the local pi package baseline to `@earendil-works/pi-coding-agent` `0.78.1` and regenerated the npm lockfile while keeping pi runtime peers as optional wildcards.
+- Reviewed the pi `0.78.1` changelog, extension docs, package docs, and current extension examples; no hard pi version requirement was added.
+- Tightened Z.ai server-id tool schemas to enum schemas that are friendlier to provider tool-calling implementations.
+- Removed the runtime `npx` fallback for the bundled vision MCP server and now launches the installed `@z_ai/mcp-server` entrypoint with the current Node.js runtime.
+- Dropped the unused direct `@earendil-works/pi-ai` package peer/dev dependency because this extension imports only `@earendil-works/pi-coding-agent` and `typebox` from pi runtime packages.
+
 ## 0.1.4 - 2026-05-28
 
 ### Changed

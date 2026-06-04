@@ -57,7 +57,7 @@ Install from GitHub:
 pi install https://github.com/fitchmultz/pi-zai-mcp
 ```
 
-Compatibility note: this package is tested against the current pi release during each package update, and pi-bundled runtime packages are declared as optional wildcard peers. That keeps installs forward-open for future pi releases: npm peer ranges should not block users from trying a newer pi, though runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
+Compatibility note: this release is tested against pi `0.78.1`, which is the suggested minimum baseline for this package version. Pi-bundled runtime packages are declared as optional wildcard peers, so npm peer ranges do not hard-block users from trying newer pi releases; runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
 
 Try it without installing permanently:
 
@@ -110,7 +110,7 @@ Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When t
 ## How it works
 
 - `search`, `reader`, and `zread` use Z.ai Streamable HTTP MCP endpoints.
-- `vision` uses the `@z_ai/mcp-server` stdio server. The package depends on `@z_ai/mcp-server@0.1.4` and falls back to `npx -y @z_ai/mcp-server@0.1.4` only if the local binary is unavailable.
+- `vision` uses the bundled `@z_ai/mcp-server` stdio server dependency through the current Node.js runtime. The extension no longer shells out to `npx` at tool-call time, so installed package behavior stays deterministic and does not depend on package-manager network access after install.
 - The extension registers generic tools synchronously so pi startup is fast.
 - Server connections and tool discovery are lazy by default to avoid blocking pi startup on network or package-manager work.
 - `session_shutdown` closes any opened MCP transports.
