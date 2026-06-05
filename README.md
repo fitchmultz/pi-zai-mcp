@@ -162,8 +162,9 @@ Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When t
 - The extension registers curated tools synchronously so pi startup is fast and tool context stays small.
 - Tool calls emit an immediate progress update so the TUI shows a Z.AI tool card while MCP connection or long vision/repository work is still running.
 - Tool results use compact TUI rendering by default. Press Ctrl+O to expand a bounded, syntax-highlighted view without dumping very large MCP outputs into the terminal.
-- Calls are serialized per upstream MCP server to avoid transport-level contention when multiple actions target the same Z.AI server at once.
+- Calls are serialized per upstream MCP server to avoid transport-level contention when multiple actions target the same Z.AI server at once; queued calls still respect user cancellation.
 - Server connections are lazy by default to avoid blocking pi startup on network or package-manager work; `/zai-mcp-status` reports this explicitly before first use.
+- Upstream MCP error responses are surfaced as failed pi tool calls instead of successful results with error text.
 - `session_shutdown` closes any opened MCP transports.
 
 ## Security and data flow

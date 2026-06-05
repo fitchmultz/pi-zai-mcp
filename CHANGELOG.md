@@ -14,6 +14,9 @@ All notable changes to this project are documented here.
 - Added compact custom TUI renderers with Ctrl+O expansion, bounded output previews, and JSON syntax highlighting for Z.AI tool results.
 - Increased the default MCP timeout to 180 seconds because vision and repository-search actions can exceed 30 seconds in normal use.
 - Added immediate progress updates and per-server MCP call serialization so long calls show a useful TUI card early and concurrent calls do not contend for the same upstream transport.
+- Switched tool enum schemas to pi's Google-compatible `StringEnum` helper and added the matching `@earendil-works/pi-ai` peer/dev dependency alignment.
+- Changed upstream MCP `isError` responses to fail pi tool calls, made queued calls cancellation-aware, and guarded `/zai-mcp-status` output for non-UI modes.
+- Tightened collapsed tool-call summaries so long URLs stay compact in the TUI.
 
 ## 0.1.5 - 2026-06-04
 

@@ -7,6 +7,7 @@ import {
   keyHint,
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
+import { StringEnum } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -23,15 +24,6 @@ const VISION_MCP_PACKAGE = "@z_ai/mcp-server";
 const VISION_MCP_BIN = "zai-mcp-server";
 const require = createRequire(import.meta.url);
 const DEFAULT_TIMEOUT_MS = positiveIntegerFromEnv("Z_AI_MCP_TIMEOUT_MS", 180_000);
-
-function stringEnum<const T extends readonly string[]>(values: T, options?: { description?: string; default?: T[number] }) {
-  return Type.Unsafe<T[number]>({
-    type: "string",
-    enum: [...values],
-    ...(options?.description ? { description: options.description } : {}),
-    ...(options?.default ? { default: options.default } : {}),
-  });
-}
 
 type ServerId = "search" | "reader" | "zread" | "vision";
 type ServerKind = "http" | "stdio";
@@ -82,19 +74,19 @@ const SEARCH_SCHEMA = Type.Object({
     Type.String({ description: "Optional whitelist domain, for example 'docs.z.ai' or 'github.com'." }),
   ),
   recency_filter: Type.Optional(
-    stringEnum(["oneDay", "oneWeek", "oneMonth", "oneYear", "noLimit"] as const, {
+    StringEnum(["oneDay", "oneWeek", "oneMonth", "oneYear", "noLimit"] as const, {
       description: "Optional time range for search results.",
       default: "noLimit",
     }),
   ),
   content_size: Type.Optional(
-    stringEnum(["medium", "high"] as const, {
+    StringEnum(["medium", "high"] as const, {
       description: "Summary size. 'medium' is 400-600 words; 'high' is about 2500 words and costs more quota.",
       default: "medium",
     }),
   ),
   location: Type.Optional(
-    stringEnum(["cn", "us"] as const, {
+    StringEnum(["cn", "us"] as const, {
       description: "User region hint. Use 'cn' for Chinese-region queries, 'us' for non-Chinese-region queries.",
       default: "cn",
     }),
@@ -106,7 +98,7 @@ const READER_SCHEMA = Type.Object({
   timeout: Type.Optional(Type.Integer({ description: "Request timeout in seconds. Z.AI default is 20." })),
   no_cache: Type.Optional(Type.Boolean({ description: "Disable Z.AI reader cache." })),
   return_format: Type.Optional(
-    stringEnum(["markdown", "text"] as const, { description: "Return Markdown or plain text.", default: "markdown" }),
+    StringEnum(["markdown", "text"] as const, { description: "Return Markdown or plain text.", default: "markdown" }),
   ),
   retain_images: Type.Optional(Type.Boolean({ description: "Keep image references in the returned content. Default true upstream." })),
   no_gfm: Type.Optional(Type.Boolean({ description: "Disable GitHub Flavored Markdown output." })),
@@ -116,21 +108,21 @@ const READER_SCHEMA = Type.Object({
 });
 
 const ZREAD_SCHEMA = Type.Object({
-  action: stringEnum(["search_doc", "read_file", "get_repo_structure"] as const, {
+  action: StringEnum(["search_doc", "read_file", "get_repo_structure"] as const, {
     description:
       "Repository action: search_doc searches docs/issues/commits, read_file reads one file, get_repo_structure lists directories/files.",
   }),
   repo_name: Type.String({ description: "Public GitHub repository in owner/repo form, for example 'vitejs/vite'." }),
   query: Type.Optional(Type.String({ description: "Required for search_doc: keywords or question about the repository." })),
   language: Type.Optional(
-    stringEnum(["en", "zh"] as const, { description: "Optional search_doc response language hint.", default: "en" }),
+    StringEnum(["en", "zh"] as const, { description: "Optional search_doc response language hint.", default: "en" }),
   ),
   file_path: Type.Optional(Type.String({ description: "Required for read_file: repository-relative file path." })),
   dir_path: Type.Optional(Type.String({ description: "Optional for get_repo_structure: directory path; default is repository root." })),
 });
 
 const VISION_SCHEMA = Type.Object({
-  action: stringEnum(
+  action: StringEnum(
     [
       "ui_to_artifact",
       "extract_text_from_screenshot",
@@ -163,7 +155,7 @@ const VISION_SCHEMA = Type.Object({
   ),
   prompt: Type.String({ description: "Specific instructions for what to analyze, extract, compare, diagnose, or generate." }),
   output_type: Type.Optional(
-    stringEnum(["code", "prompt", "spec", "description"] as const, {
+    StringEnum(["code", "prompt", "spec", "description"] as const, {
       description: "Required for ui_to_artifact: desired artifact type.",
     }),
   ),
@@ -296,6 +288,10 @@ function unwrapJsonString(text: string): string {
   }
 }
 
+function isMcpErrorResult(result: unknown): boolean {
+  return Boolean(result && typeof result === "object" && (result as { isError?: boolean }).isError);
+}
+
 function summarizeMcpResult(result: unknown): string {
   if (!result || typeof result !== "object") return String(result);
 
@@ -401,20 +397,54 @@ async function connect(server: ManagedServer): Promise<Client> {
   }
 }
 
-async function runExclusive<T>(server: ManagedServer, operation: () => Promise<T>): Promise<T> {
+function abortError(message: string): Error {
+  return new Error(message);
+}
+
+function throwIfAborted(signal: AbortSignal | undefined, message: string): void {
+  if (signal?.aborted) throw abortError(message);
+}
+
+function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined, message: string): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(abortError(message));
+
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const onAbort = () => {
+      cleanup();
+      reject(abortError(message));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
+async function runExclusive<T>(server: ManagedServer, signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<T> {
   const previous = server.callQueue ?? Promise.resolve();
-  const run = previous.catch(() => undefined).then(operation);
+  const run = previous.catch(() => undefined).then(() => {
+    throwIfAborted(signal, "Tool call was cancelled before it started.");
+    return operation();
+  });
   const queueTail = run.then(
     () => undefined,
     () => undefined,
   );
   server.callQueue = queueTail;
-
-  try {
-    return await run;
-  } finally {
+  queueTail.finally(() => {
     if (server.callQueue === queueTail) server.callQueue = undefined;
-  }
+  });
+
+  return withAbort(run, signal, "Tool call was cancelled while waiting for another Z.AI MCP call to finish.");
 }
 
 async function callMcpTool(
@@ -424,10 +454,10 @@ async function callMcpTool(
   signal: AbortSignal | undefined,
   onProgress?: (message: string) => void,
 ) {
-  if (signal?.aborted) throw new Error("Tool call was cancelled before it started.");
+  throwIfAborted(signal, "Tool call was cancelled before it started.");
   onProgress?.(`Connecting to ${server.label}...`);
   const client = await connect(server);
-  if (signal?.aborted) throw new Error("Tool call was cancelled before it reached Z.AI MCP.");
+  throwIfAborted(signal, "Tool call was cancelled before it reached Z.AI MCP.");
   onProgress?.(`Calling ${server.label} ${toolName}...`);
 
   return client.callTool(
@@ -470,8 +500,9 @@ async function executeCuratedTool(
 
   update(server.callQueue ? `Waiting for another ${server.label} call to finish...` : `Starting ${server.label} ${toolName}...`);
 
-  const result = await runExclusive(server, () => callMcpTool(server, toolName, cleanArgs(args), signal, update));
+  const result = await runExclusive(server, signal, () => callMcpTool(server, toolName, cleanArgs(args), signal, update));
   const text = summarizeMcpResult(result);
+  if (isMcpErrorResult(result)) throw new Error(`Z.AI MCP ${server.id}/${toolName} failed:\n${text}`);
   const truncated = await truncateForTool(text, server.id, toolName);
   return {
     content: [{ type: "text" as const, text: truncated.text }],
@@ -506,8 +537,13 @@ function limitedLines(text: string, maxLines: number): { text: string; totalLine
   };
 }
 
+function compactInline(value: unknown, maxLength = 120): string {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
 function renderToolCall(title: string, summary: string, theme: { fg(color: string, text: string): string; bold(text: string): string }) {
-  const content = `${theme.fg("toolTitle", theme.bold(title))} ${theme.fg("accent", summary)}`;
+  const content = `${theme.fg("toolTitle", theme.bold(title))} ${theme.fg("accent", compactInline(summary))}`;
   return new Text(content.trimEnd(), 0, 0);
 }
 
@@ -809,8 +845,13 @@ export default function zaiMcpExtension(pi: ExtensionAPI) {
   pi.registerCommand("zai-mcp-status", {
     description: "Show configured Z.ai MCP servers and connection status",
     handler: async (_args, ctx) => {
-      const status = serverStatus(servers);
-      ctx.ui.notify(JSON.stringify(status, null, 2), "info");
+      const status = JSON.stringify(serverStatus(servers), null, 2);
+      if (ctx.hasUI) {
+        ctx.ui.notify(status, "info");
+      } else {
+        const stream = ctx.mode === "json" ? process.stderr : process.stdout;
+        stream.write(`${status}\n`);
+      }
     },
   });
 
