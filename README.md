@@ -2,7 +2,7 @@
 
 Give pi agents Z.ai-powered web search, URL reading, repository reading, and vision tools through MCP without leaving a pi session. This is an unofficial community package, not an official Z.ai package.
 
-This package focuses on Z.AI MCP servers. GLM-5.1 model access is already covered by pi's built-in `zai` provider (`ZAI_API_KEY`) and the OpenAI-compatible Z.AI API; this package adds the external MCP context/tools that Z.AI documents for coding agents.
+This package focuses on Z.AI MCP servers. GLM-5.2 model access is already covered by pi's built-in `zai` provider (`ZAI_API_KEY`) and the OpenAI-compatible Z.AI API; this package adds the external MCP context/tools that Z.AI documents for coding agents.
 
 ## What you get
 
@@ -19,7 +19,7 @@ Z.AI also documents Slide/Poster, Translation, and Video Effect Template agents 
 
 Reviewed Z.AI docs on 2026-06-05:
 
-- GLM-5.1 supports text input/output, 200K context, 128K max output, thinking mode, streaming, function calling, context caching, structured output, and MCP integration.
+- GLM-5.2 supports text input/output, 200K context, 128K max output, thinking mode, streaming, function calling, context caching, structured output, and MCP integration.
 - Web Search MCP documents web search with query, domain filter, recency filter, content size, and location options. The current remote MCP tool is `web_search_prime`.
 - Web Reader MCP documents URL reading with timeout, cache, Markdown/text, image retention, GFM, image data URL, image summary, and link summary options. The current remote MCP tool is `webReader`.
 - Zread MCP documents `search_doc`, `read_file`, and `get_repo_structure` for public GitHub repository search, file reading, and structure inspection.

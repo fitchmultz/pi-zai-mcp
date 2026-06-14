@@ -9,7 +9,7 @@ All notable changes to this project are documented here.
 ### Changed
 - Replaced generic MCP list/call tools and per-upstream-tool wrappers with four curated pi tools: `z_ai_search`, `z_ai_reader`, `z_ai_zread`, and `z_ai_vision`.
 - Moved upstream MCP tool names behind stable pi-facing actions and arguments to reduce tool context bloat and agent confusion.
-- Refreshed README coverage and tool-reference docs against the 2026-06-05 Z.AI GLM-5.1, agent, MCP, and coding-agent best-practice docs.
+- Refreshed README coverage and tool-reference docs against the 2026-06-05 Z.AI GLM-5.2, agent, MCP, and coding-agent best-practice docs.
 - Clarified `/zai-mcp-status` output so lazy, not-yet-opened server connections are not mistaken for unavailable tools.
 - Added compact custom TUI renderers with Ctrl+O expansion, bounded output previews, and JSON syntax highlighting for Z.AI tool results.
 - Increased the default MCP timeout to 180 seconds because vision and repository-search actions can exceed 30 seconds in normal use.
