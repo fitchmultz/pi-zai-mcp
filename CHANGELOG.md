@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.7 - 2026-06-15
+
+### Changed
+- updated the local pi development baseline to `@earendil-works/*` `0.79.4` and refreshed the npm lockfile
+
+### Validation
+- ran `npm run typecheck`, fake-pi load/registration smoke, and a bounded Z.AI search smoke under pi `0.79.4`
+
 ## 0.1.6 - 2026-06-05
 
 ### Changed
