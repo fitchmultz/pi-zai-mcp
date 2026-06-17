@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
@@ -19,10 +19,10 @@ import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 
 const EXTENSION_NAME = "pi-zai-mcp";
-const EXTENSION_VERSION = "0.1.6";
+const require = createRequire(import.meta.url);
+const { version: EXTENSION_VERSION } = require("../package.json") as { version: string };
 const VISION_MCP_PACKAGE = "@z_ai/mcp-server";
 const VISION_MCP_BIN = "zai-mcp-server";
-const require = createRequire(import.meta.url);
 const DEFAULT_TIMEOUT_MS = positiveIntegerFromEnv("Z_AI_MCP_TIMEOUT_MS", 180_000);
 
 type ServerId = "search" | "reader" | "zread" | "vision";
@@ -588,8 +588,81 @@ function renderCuratedResult(
   return new Text(`${header}\n${body}${footer}`, 0, 0);
 }
 
-function registerSearchTool(pi: ExtensionAPI, server: ManagedServer) {
-  pi.registerTool({
+type ActionArgSpec = {
+  required: readonly string[];
+  picks: readonly string[];
+};
+
+type CuratedToolConfig = {
+  name: string;
+  label: string;
+  description: string;
+  promptSnippet: string;
+  promptGuidelines: string[];
+  parameters: ToolDefinition<any>["parameters"];
+  renderCall: (...args: any[]) => any;
+  renderResult: (...args: any[]) => any;
+  toMcpToolName: (params: any) => string;
+  toMcpArgs: (params: any) => Record<string, unknown>;
+};
+
+function buildArgs(
+  action: string,
+  params: Record<string, unknown>,
+  table: Partial<Record<string, ActionArgSpec>>,
+): Record<string, unknown> | undefined {
+  const spec = table[action];
+  if (!spec) return undefined;
+
+  for (const key of spec.required) requireParam(params, key, action);
+  return Object.fromEntries(spec.picks.map((key) => [key, params[key]]));
+}
+
+const ZREAD_ACTION_ARGS = {
+  search_doc: { required: ["query"], picks: ["repo_name", "query", "language"] },
+  read_file: { required: ["file_path"], picks: ["repo_name", "file_path"] },
+  get_repo_structure: { required: [], picks: ["repo_name", "dir_path"] },
+} as const satisfies Record<ZreadAction, ActionArgSpec>;
+
+function zreadArgs(params: Record<string, unknown>): Record<string, unknown> {
+  const action = params.action as ZreadAction;
+  requireParam(params, "repo_name", action);
+
+  const args = buildArgs(action, params, ZREAD_ACTION_ARGS);
+  if (args) return args;
+
+  throw new Error(`Unsupported Zread action '${String(action)}'.`);
+}
+
+const VISION_ACTION_ARGS = {
+  ui_diff_check: {
+    required: ["expected_image_source", "actual_image_source"],
+    picks: ["expected_image_source", "actual_image_source", "prompt"],
+  },
+  analyze_video: { required: ["video_source"], picks: ["video_source", "prompt"] },
+  ui_to_artifact: { required: ["image_source", "output_type"], picks: ["image_source", "output_type", "prompt"] },
+  extract_text_from_screenshot: {
+    required: ["image_source"],
+    picks: ["image_source", "prompt", "programming_language"],
+  },
+  diagnose_error_screenshot: { required: ["image_source"], picks: ["image_source", "prompt", "context"] },
+  understand_technical_diagram: { required: ["image_source"], picks: ["image_source", "prompt", "diagram_type"] },
+  analyze_data_visualization: { required: ["image_source"], picks: ["image_source", "prompt", "analysis_focus"] },
+  analyze_image: { required: ["image_source"], picks: ["image_source", "prompt"] },
+} as const satisfies Record<VisionAction, ActionArgSpec>;
+
+function visionArgs(params: Record<string, unknown>): Record<string, unknown> {
+  const action = params.action as VisionAction;
+
+  const args = buildArgs(action, params, VISION_ACTION_ARGS);
+  if (args) return args;
+
+  requireParam(params, "image_source", action);
+  throw new Error(`Unsupported vision action '${String(action)}'.`);
+}
+
+const REGISTRARS = {
+  search: {
     name: "z_ai_search",
     label: "Z.ai Search",
     description:
@@ -607,26 +680,16 @@ function registerSearchTool(pi: ExtensionAPI, server: ManagedServer) {
     renderResult(result, options, theme, context) {
       return renderCuratedResult(result, options, theme, context);
     },
-    async execute(_toolCallId, params, signal, onUpdate) {
-      return executeCuratedTool(
-        server,
-        "web_search_prime",
-        {
-          search_query: params.query,
-          search_domain_filter: params.domain_filter,
-          search_recency_filter: params.recency_filter,
-          content_size: params.content_size,
-          location: params.location,
-        },
-        signal,
-        onUpdate,
-      );
-    },
-  });
-}
-
-function registerReaderTool(pi: ExtensionAPI, server: ManagedServer) {
-  pi.registerTool({
+    toMcpToolName: () => "web_search_prime",
+    toMcpArgs: (params) => ({
+      search_query: params.query,
+      search_domain_filter: params.domain_filter,
+      search_recency_filter: params.recency_filter,
+      content_size: params.content_size,
+      location: params.location,
+    }),
+  },
+  reader: {
     name: "z_ai_reader",
     label: "Z.ai Reader",
     description:
@@ -643,39 +706,10 @@ function registerReaderTool(pi: ExtensionAPI, server: ManagedServer) {
     renderResult(result, options, theme, context) {
       return renderCuratedResult(result, options, theme, context);
     },
-    async execute(_toolCallId, params, signal, onUpdate) {
-      return executeCuratedTool(server, "webReader", params, signal, onUpdate);
-    },
-  });
-}
-
-function zreadToolName(action: ZreadAction): string {
-  return action;
-}
-
-function zreadArgs(params: Record<string, unknown>): Record<string, unknown> {
-  const action = params.action as ZreadAction;
-  requireParam(params, "repo_name", action);
-
-  if (action === "search_doc") {
-    requireParam(params, "query", action);
-    return { repo_name: params.repo_name, query: params.query, language: params.language };
-  }
-
-  if (action === "read_file") {
-    requireParam(params, "file_path", action);
-    return { repo_name: params.repo_name, file_path: params.file_path };
-  }
-
-  if (action === "get_repo_structure") {
-    return { repo_name: params.repo_name, dir_path: params.dir_path };
-  }
-
-  throw new Error(`Unsupported Zread action '${String(action)}'.`);
-}
-
-function registerZreadTool(pi: ExtensionAPI, server: ManagedServer) {
-  pi.registerTool({
+    toMcpToolName: () => "webReader",
+    toMcpArgs: (params) => params,
+  },
+  zread: {
     name: "z_ai_zread",
     label: "Z.ai Zread",
     description:
@@ -693,87 +727,10 @@ function registerZreadTool(pi: ExtensionAPI, server: ManagedServer) {
     renderResult(result, options, theme, context) {
       return renderCuratedResult(result, options, theme, context);
     },
-    async execute(_toolCallId, params, signal, onUpdate) {
-      const action = params.action as ZreadAction;
-      return executeCuratedTool(server, zreadToolName(action), zreadArgs(params), signal, onUpdate);
-    },
-  });
-}
-
-function visionToolName(action: VisionAction): string {
-  return action;
-}
-
-function visionArgs(params: Record<string, unknown>): Record<string, unknown> {
-  const action = params.action as VisionAction;
-
-  if (action === "ui_diff_check") {
-    requireParam(params, "expected_image_source", action);
-    requireParam(params, "actual_image_source", action);
-    return {
-      expected_image_source: params.expected_image_source,
-      actual_image_source: params.actual_image_source,
-      prompt: params.prompt,
-    };
-  }
-
-  if (action === "analyze_video") {
-    requireParam(params, "video_source", action);
-    return { video_source: params.video_source, prompt: params.prompt };
-  }
-
-  requireParam(params, "image_source", action);
-
-  if (action === "ui_to_artifact") {
-    requireParam(params, "output_type", action);
-    return {
-      image_source: params.image_source,
-      output_type: params.output_type,
-      prompt: params.prompt,
-    };
-  }
-
-  if (action === "extract_text_from_screenshot") {
-    return {
-      image_source: params.image_source,
-      prompt: params.prompt,
-      programming_language: params.programming_language,
-    };
-  }
-
-  if (action === "diagnose_error_screenshot") {
-    return {
-      image_source: params.image_source,
-      prompt: params.prompt,
-      context: params.context,
-    };
-  }
-
-  if (action === "understand_technical_diagram") {
-    return {
-      image_source: params.image_source,
-      prompt: params.prompt,
-      diagram_type: params.diagram_type,
-    };
-  }
-
-  if (action === "analyze_data_visualization") {
-    return {
-      image_source: params.image_source,
-      prompt: params.prompt,
-      analysis_focus: params.analysis_focus,
-    };
-  }
-
-  if (action === "analyze_image") {
-    return { image_source: params.image_source, prompt: params.prompt };
-  }
-
-  throw new Error(`Unsupported vision action '${String(action)}'.`);
-}
-
-function registerVisionTool(pi: ExtensionAPI, server: ManagedServer) {
-  pi.registerTool({
+    toMcpToolName: (params) => params.action as string,
+    toMcpArgs: zreadArgs,
+  },
+  vision: {
     name: "z_ai_vision",
     label: "Z.ai Vision",
     description:
@@ -792,9 +749,23 @@ function registerVisionTool(pi: ExtensionAPI, server: ManagedServer) {
     renderResult(result, options, theme, context) {
       return renderCuratedResult(result, options, theme, context);
     },
+    toMcpToolName: (params) => params.action as string,
+    toMcpArgs: visionArgs,
+  },
+} satisfies Record<ServerId, CuratedToolConfig>;
+
+function registerCuratedTool(pi: ExtensionAPI, server: ManagedServer, config: CuratedToolConfig) {
+  pi.registerTool<any>({
+    name: config.name,
+    label: config.label,
+    description: config.description,
+    promptSnippet: config.promptSnippet,
+    promptGuidelines: config.promptGuidelines,
+    parameters: config.parameters,
+    renderCall: config.renderCall,
+    renderResult: config.renderResult,
     async execute(_toolCallId, params, signal, onUpdate) {
-      const action = params.action as VisionAction;
-      return executeCuratedTool(server, visionToolName(action), visionArgs(params), signal, onUpdate);
+      return executeCuratedTool(server, config.toMcpToolName(params), config.toMcpArgs(params), signal, onUpdate);
     },
   });
 }
@@ -830,10 +801,8 @@ function serverStatus(servers: ManagedServer[]) {
 
 function registerConfiguredTools(pi: ExtensionAPI, servers: ManagedServer[]) {
   for (const server of servers) {
-    if (server.id === "search") registerSearchTool(pi, server);
-    if (server.id === "reader") registerReaderTool(pi, server);
-    if (server.id === "zread") registerZreadTool(pi, server);
-    if (server.id === "vision") registerVisionTool(pi, server);
+    const config = REGISTRARS[server.id];
+    if (config) registerCuratedTool(pi, server, config);
   }
 }
 

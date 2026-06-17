@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.8 - 2026-06-17
+
+### Changed
+- Refactored tool registration: collapsed the four per-tool `register*Tool` functions into one data-driven `registerCuratedTool` registrar backed by a `REGISTRARS` map keyed by server id, so adding a server is one map entry instead of a new function plus registration branches.
+- Replaced the `zreadArgs` and `visionArgs` if-ladders with declarative action-argument tables and a single `buildArgs` helper.
+- Removed the no-op `zreadToolName`/`visionToolName` pass-through wrappers; the action string is used directly as the upstream MCP tool name.
+
+### Fixed
+- Synced the MCP client `version` metadata with `package.json` (previously a hardcoded `0.1.6` that drifted behind the published version) by reading it through the existing `createRequire`.
+
+### Validation
+- ran `npm run typecheck` and a full Z.AI capability smoke: `z_ai_search`, `z_ai_reader`, all three `z_ai_zread` actions, and all eight `z_ai_vision` actions through the refactored registration and argument tables under pi `0.79.4`.
+
 ## 0.1.7 - 2026-06-15
 
 ### Changed
