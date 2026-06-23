@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.11 - 2026-06-23
+
+### Changed
+- updated the local pi development baseline to `@earendil-works/*` `0.80.1` and refreshed the npm lockfile
+- refreshed the README compatibility note
+- moved the `StringEnum` import to `@earendil-works/pi-ai/compat`, matching the Pi 0.80 source typechecking migration guidance
+
+### Validation
+- Pending in this release train.
+
 ## 0.1.10 - 2026-06-22
 
 ### Changed

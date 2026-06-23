@@ -41,7 +41,7 @@ Install from GitHub:
 pi install https://github.com/fitchmultz/pi-zai-mcp
 ```
 
-Compatibility note: this release is tested against pi `0.79.10`, which is the suggested minimum baseline for this package version. Pi-bundled runtime packages are declared as optional wildcard peers, so npm peer ranges do not hard-block users from trying newer pi releases; runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
+Compatibility note: this release is tested against pi `0.80.1`, which is the suggested minimum baseline for this package version. Pi-bundled runtime packages are declared as optional wildcard peers, so npm peer ranges do not hard-block users from trying newer pi releases; runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
 
 Try it without installing permanently:
 
