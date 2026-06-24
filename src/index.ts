@@ -14,7 +14,8 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Type } from "typebox";
 import { mkdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 
@@ -181,8 +182,47 @@ function positiveIntegerFromEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
 }
 
+/**
+ * Resolve the pi config directory the same way pi and pi-web-access do, so the
+ * auth.json fallback finds credentials regardless of how pi was launched.
+ */
+function getPiConfigDir(): string {
+  if (process.env.PI_CODING_AGENT_DIR) return process.env.PI_CODING_AGENT_DIR;
+  if (process.env.XDG_CONFIG_HOME) return join(process.env.XDG_CONFIG_HOME, "pi");
+  return join(homedir(), ".pi");
+}
+
+/**
+ * Best-effort fallback for users who configured the zai provider in pi
+ * (e.g. via `/provider` or `settings.json`) but did not export an env var.
+ * Reads the key pi stores at <piConfigDir>/agent/auth.json. Never throws —
+ * a malformed or missing file simply yields undefined and the caller reports
+ * the usual missing-key error.
+ */
+function readZaiKeyFromPiAuth(): string | undefined {
+  try {
+    const authPath = join(getPiConfigDir(), "agent", "auth.json");
+    if (!existsSync(authPath)) return undefined;
+
+    const raw = readFileSync(authPath, "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (parsed && typeof parsed === "object") {
+      // pi stores provider API keys as { zai: { type: "api_key", key: "..." } }
+      const zai = (parsed as Record<string, unknown>).zai;
+      if (zai && typeof zai === "object") {
+        const key = (zai as Record<string, unknown>).key;
+        if (typeof key === "string" && key.length > 0) return key;
+      }
+    }
+  } catch {
+    // Ignore read/parse errors; the env-var path or the missing-key warning still applies.
+  }
+  return undefined;
+}
+
 function getApiKey(): string | undefined {
-  return process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY;
+  return process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || readZaiKeyFromPiAuth();
 }
 
 function enabledServerIds(): Set<ServerId> | undefined {
@@ -839,6 +879,10 @@ export default function zaiMcpExtension(pi: ExtensionAPI) {
   });
 
   if (!getApiKey()) {
-    console.warn(`[${EXTENSION_NAME}] Z_AI_API_KEY (or ZAI_API_KEY) is not set; Z.ai MCP tools will fail until configured.`);
+    console.warn(
+      `[${EXTENSION_NAME}] No Z.ai API key found. Set Z_AI_API_KEY (or ZAI_API_KEY) env var, ` +
+        `or configure the zai provider in pi (it will be read from <piConfigDir>/agent/auth.json). ` +
+        `Z.ai MCP tools will fail until configured.`,
+    );
   }
 }
