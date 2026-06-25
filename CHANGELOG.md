@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.13 - 2026-06-25
+
+### Added
+- added a best-effort fallback to pi's stored `zai` provider key in `auth.json` when `Z_AI_API_KEY` and `ZAI_API_KEY` are unset, while preserving env-var precedence
+
+### Fixed
+- resolved the API-key fallback through pi's actual agent directory (`getAgentDir()` / `PI_CODING_AGENT_DIR`) instead of assuming `<config>/agent/auth.json`
+
+### Validation
+- ran `npm run ci`
+- ran `npm run release:dry-run`
+- ran isolated pi package-load smokes with `PI_CODING_AGENT_DIR` and `pi install -l --approve /Users/mitchfultz/Projects/AI/pi-zai-mcp`
+
 ## 0.1.12 - 2026-06-24
 
 ### Fixed

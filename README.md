@@ -64,10 +64,12 @@ pi -e .
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `Z_AI_API_KEY` / `ZAI_API_KEY` | Yes | none | Z.ai API key used for HTTP MCP Bearer auth and the vision stdio server. |
+| `Z_AI_API_KEY` / `ZAI_API_KEY` | Yes* | none | Z.ai API key used for HTTP MCP Bearer auth and the vision stdio server. Env vars take precedence over pi's stored `zai` provider key. |
 | `Z_AI_MCP_SERVERS` | No | `all` | Comma-separated subset of `search,reader,zread,vision`; disabled servers do not register their pi tools. |
 | `Z_AI_MCP_TIMEOUT_MS` | No | `180000` | Per-connection/tool-call timeout in milliseconds; vision and repository-search actions can take longer than ordinary search/read calls. |
 | `Z_AI_MODE` | No | `ZAI` | Passed through to the vision MCP server; Z.AI docs list `ZAI` as the supported value. |
+
+\* If env vars are unset, the extension falls back to the key pi stores for its built-in `zai` provider in `auth.json` (usually `~/.pi/agent/auth.json`; `PI_CODING_AGENT_DIR` is honored). Run `/login` in pi and choose the ZAI provider to store this key.
 
 Example: disable vision server access for a lighter setup.
 
@@ -170,7 +172,7 @@ Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When t
 ## Security and data flow
 
 - Pi extensions run with your local user permissions. Review code before installing any third-party pi package.
-- The extension reads `Z_AI_API_KEY` or `ZAI_API_KEY` from the environment; it does not store credentials.
+- The extension reads `Z_AI_API_KEY` or `ZAI_API_KEY` from the environment, or falls back to pi's stored `zai` provider key in `auth.json`; it does not store credentials itself.
 - HTTP MCP calls send the key as a Bearer token to Z.ai MCP endpoints.
 - Vision calls start a local stdio MCP server and pass the key in that child process environment.
 - Truncated full outputs are written under your OS temp directory, not this repo.

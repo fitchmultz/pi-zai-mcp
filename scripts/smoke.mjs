@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { __test, default as zaiMcpExtension } from "../src/index.ts";
 
 const savedEnv = { ...process.env };
@@ -24,6 +27,7 @@ function loadExtension(env = {}) {
   delete process.env.Z_AI_MCP_SERVERS;
   delete process.env.Z_AI_API_KEY;
   delete process.env.ZAI_API_KEY;
+  delete process.env.PI_CODING_AGENT_DIR;
   Object.assign(process.env, { Z_AI_API_KEY: "test-key", ...env });
 
   const tools = [];
@@ -94,8 +98,53 @@ delete process.env.Z_AI_API_KEY;
 delete process.env.ZAI_API_KEY;
 await assert.rejects(
   () => loaded.tools[0].execute("call-1", { query: "current pi docs" }, undefined, undefined, {}),
-  /Missing Z_AI_API_KEY/,
+  /Missing Z\.ai API key/,
 );
+
+const agentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-auth-"));
+try {
+  restoreEnv();
+  delete process.env.Z_AI_API_KEY;
+  delete process.env.ZAI_API_KEY;
+  process.env.PI_CODING_AGENT_DIR = agentDir;
+  await mkdir(agentDir, { recursive: true });
+  await writeFile(
+    join(agentDir, "auth.json"),
+    JSON.stringify({ zai: { type: "api_key", key: "$ZAI_FROM_AUTH", env: { ZAI_FROM_AUTH: "stored-key" } } }),
+    "utf8",
+  );
+  assert.equal(__test.getApiKey(), "stored-key");
+  process.env.Z_AI_API_KEY = "env-key";
+  assert.equal(__test.getApiKey(), "env-key");
+} finally {
+  await rm(agentDir, { recursive: true, force: true });
+}
+
+const commandAgentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-command-auth-"));
+try {
+  const marker = join(commandAgentDir, "command-ran");
+  restoreEnv();
+  delete process.env.Z_AI_API_KEY;
+  delete process.env.ZAI_API_KEY;
+  process.env.PI_CODING_AGENT_DIR = commandAgentDir;
+  await writeFile(
+    join(commandAgentDir, "auth.json"),
+    JSON.stringify({
+      zai: {
+        type: "api_key",
+        key: `!node -e ${JSON.stringify(`require("node:fs").appendFileSync(${JSON.stringify(marker)}, "x"); process.stdout.write("command-key")`)}`,
+      },
+    }),
+    "utf8",
+  );
+  assert.equal(__test.hasApiKeySource(), true);
+  await assert.rejects(() => access(marker));
+  assert.equal(__test.getApiKey(), "command-key");
+  assert.equal(__test.getApiKey(), "command-key");
+  assert.equal(await readFile(marker, "utf8"), "x");
+} finally {
+  await rm(commandAgentDir, { recursive: true, force: true });
+}
 
 const command = loaded.commands.get("zai-mcp-status");
 let rpcNotification;

@@ -3,6 +3,7 @@ import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
   formatSize,
+  getAgentDir,
   highlightCode,
   keyHint,
   truncateHead,
@@ -13,8 +14,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Type } from "typebox";
-import { mkdir, writeFile } from "node:fs/promises";
+import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -188,8 +191,112 @@ function positiveIntegerFromEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
 }
 
+const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
+const AUTH_COMMAND_CACHE = new Map<string, string | undefined>();
+
+function resolveAuthKeyTemplate(value: string, env?: Record<string, string>): string | undefined {
+  let resolved = "";
+  let index = 0;
+
+  while (index < value.length) {
+    const dollarIndex = value.indexOf("$", index);
+    if (dollarIndex < 0) return resolved + value.slice(index);
+
+    resolved += value.slice(index, dollarIndex);
+    const next = value[dollarIndex + 1];
+
+    if (next === "$" || next === "!") {
+      resolved += next;
+      index = dollarIndex + 2;
+      continue;
+    }
+
+    if (next === "{") {
+      const end = value.indexOf("}", dollarIndex + 2);
+      if (end < 0) {
+        resolved += "$";
+        index = dollarIndex + 1;
+        continue;
+      }
+      const name = value.slice(dollarIndex + 2, end);
+      if (!ENV_VAR_NAME_RE.test(name)) {
+        resolved += value.slice(dollarIndex, end + 1);
+        index = end + 1;
+        continue;
+      }
+      const replacement = env?.[name] ?? process.env[name];
+      if (replacement === undefined) return undefined;
+      resolved += replacement;
+      index = end + 1;
+      continue;
+    }
+
+    const match = value.slice(dollarIndex + 1).match(ENV_VAR_NAME_PREFIX_RE);
+    if (!match) {
+      resolved += "$";
+      index = dollarIndex + 1;
+      continue;
+    }
+
+    const replacement = env?.[match[0]] ?? process.env[match[0]];
+    if (replacement === undefined) return undefined;
+    resolved += replacement;
+    index = dollarIndex + 1 + match[0].length;
+  }
+
+  return resolved;
+}
+
+function resolveAuthKey(value: string, env?: Record<string, string>): string | undefined {
+  if (value.startsWith("!")) {
+    if (AUTH_COMMAND_CACHE.has(value)) return AUTH_COMMAND_CACHE.get(value);
+    let result: string | undefined;
+    try {
+      const output = execSync(value.slice(1), {
+        encoding: "utf8",
+        timeout: 10_000,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      result = output.trim() || undefined;
+    } catch {
+      result = undefined;
+    }
+    AUTH_COMMAND_CACHE.set(value, result);
+    return result;
+  }
+
+  return resolveAuthKeyTemplate(value, env);
+}
+
+function stringRecord(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+}
+
+function readZaiCredential(): { key: string; env?: Record<string, string> } | undefined {
+  try {
+    const raw = readFileSync(join(getAgentDir(), "auth.json"), "utf8");
+    const parsed = JSON.parse(raw) as { zai?: { type?: unknown; key?: unknown; env?: unknown } };
+    const credential = parsed.zai;
+    if (credential?.type !== "api_key" || typeof credential.key !== "string" || credential.key.length === 0) return undefined;
+    return { key: credential.key, env: stringRecord(credential.env) };
+  } catch {
+    return undefined;
+  }
+}
+
+function readZaiKeyFromPiAuth(): string | undefined {
+  const credential = readZaiCredential();
+  return credential ? resolveAuthKey(credential.key, credential.env) : undefined;
+}
+
+function hasApiKeySource(): boolean {
+  return Boolean(process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || readZaiCredential());
+}
+
 function getApiKey(): string | undefined {
-  return process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY;
+  return process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || readZaiKeyFromPiAuth();
 }
 
 function enabledServerIds(): Set<ServerId> | undefined {
@@ -240,7 +347,6 @@ function resolveVisionServerCommand(): { command: string; args: string[] } {
 }
 
 function createServers(): ManagedServer[] {
-  const apiKey = getApiKey();
   const enabled = enabledServerIds();
   const all: ManagedServer[] = [
     {
@@ -273,7 +379,6 @@ function createServers(): ManagedServer[] {
       args: visionCommand.args,
       env: {
         ...environment(),
-        ...(apiKey ? { Z_AI_API_KEY: apiKey } : {}),
         Z_AI_MODE: process.env.Z_AI_MODE || "ZAI",
       },
     });
@@ -370,7 +475,7 @@ async function connect(server: ManagedServer): Promise<Client> {
 
     if (server.kind === "http") {
       const apiKey = getApiKey();
-      if (!apiKey) throw new Error("Missing Z_AI_API_KEY (or ZAI_API_KEY) environment variable.");
+      if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY or run pi /login for the zai provider.");
       if (!server.url) throw new Error(`Missing URL for ${server.id}`);
       const transport = new StreamableHTTPClientTransport(new URL(server.url), {
         requestInit: {
@@ -382,12 +487,13 @@ async function connect(server: ManagedServer): Promise<Client> {
       server.transport = transport;
       await client.connect(transport, { timeout: DEFAULT_TIMEOUT_MS });
     } else {
-      if (!getApiKey()) throw new Error("Missing Z_AI_API_KEY (or ZAI_API_KEY) environment variable.");
+      const apiKey = getApiKey();
+      if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY or run pi /login for the zai provider.");
       if (!server.command) throw new Error(`Missing command for ${server.id}`);
       const transport = new StdioClientTransport({
         command: server.command,
         args: server.args,
-        env: server.env,
+        env: { ...server.env, Z_AI_API_KEY: apiKey },
         stderr: "pipe",
       });
       server.transport = transport;
@@ -832,7 +938,7 @@ function registerConfiguredTools(pi: ExtensionAPI, servers: ManagedServer[]) {
   }
 }
 
-export const __test = { createServers, serverStatus, truncateForTool, visionArgs };
+export const __test = { createServers, getApiKey, hasApiKeySource, serverStatus, truncateForTool, visionArgs };
 
 export default function zaiMcpExtension(pi: ExtensionAPI) {
   const servers = createServers();
@@ -870,7 +976,11 @@ export default function zaiMcpExtension(pi: ExtensionAPI) {
     await closeServers(servers);
   });
 
-  if (!getApiKey()) {
-    console.warn(`[${EXTENSION_NAME}] Z_AI_API_KEY (or ZAI_API_KEY) is not set; Z.ai MCP tools will fail until configured.`);
+  if (!hasApiKeySource()) {
+    console.warn(
+      `[${EXTENSION_NAME}] No Z.ai API key found. Set Z_AI_API_KEY/ZAI_API_KEY, ` +
+        `or run pi /login for the zai provider so ${join(getAgentDir(), "auth.json")} contains a zai API key. ` +
+        `Z.ai MCP tools will fail until configured.`,
+    );
   }
 }
