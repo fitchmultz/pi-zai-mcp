@@ -90,7 +90,7 @@ Arguments:
 - `query` — required search query. Z.AI recommends keeping it under about 70 characters.
 - `domain_filter` — optional whitelist domain such as `docs.z.ai` or `github.com`.
 - `recency_filter` — optional `oneDay`, `oneWeek`, `oneMonth`, `oneYear`, or `noLimit`.
-- `content_size` — optional `medium` or `high`; high returns more context and costs more quota.
+- `content_size` — optional `medium` or `high`; defaults to `high` for more context, specify `medium` to reduce quota use.
 - `location` — optional `cn` or `us` region hint.
 
 ### `z_ai_reader`

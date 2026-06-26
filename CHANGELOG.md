@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.14 - 2026-06-26
+
+### Changed
+- defaulted `z_ai_search.content_size` to `high` while preserving explicit `medium` for lower quota use
+
+### Validation
+- ran `npm run ci`
+
 ## 0.1.13 - 2026-06-25
 
 ### Added

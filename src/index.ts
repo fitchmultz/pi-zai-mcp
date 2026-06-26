@@ -86,8 +86,8 @@ const SEARCH_SCHEMA = Type.Object({
   ),
   content_size: Type.Optional(
     StringEnum(["medium", "high"] as const, {
-      description: "Summary size. 'medium' is 400-600 words; 'high' is about 2500 words and costs more quota.",
-      default: "medium",
+      description: "Summary size. Defaults to 'high' for more context; use 'medium' to reduce quota use.",
+      default: "high",
     }),
   ),
   location: Type.Optional(
@@ -793,6 +793,16 @@ function visionArgs(params: Record<string, unknown>): Record<string, unknown> {
   throw new Error(`Unsupported vision action '${String(action)}'.`);
 }
 
+function searchArgs(params: Record<string, unknown>): Record<string, unknown> {
+  return {
+    search_query: params.query,
+    search_domain_filter: params.domain_filter,
+    search_recency_filter: params.recency_filter,
+    content_size: params.content_size ?? "high",
+    location: params.location,
+  };
+}
+
 const REGISTRARS = {
   search: {
     name: "z_ai_search",
@@ -802,6 +812,7 @@ const REGISTRARS = {
     promptSnippet: "Search the web with Z.AI Web Search MCP using query, domain, recency, summary-size, and region filters",
     promptGuidelines: [
       "Use z_ai_search when the user needs current web information or external documentation beyond the local repo.",
+      "Default content_size is high for more context; specify medium when lower quota use is more important.",
       "Keep z_ai_search queries focused; use domain_filter for known sites and recency_filter for time-sensitive questions.",
     ],
     parameters: SEARCH_SCHEMA,
@@ -813,13 +824,7 @@ const REGISTRARS = {
       return renderCuratedResult(result, options, theme, context);
     },
     toMcpToolName: () => "web_search_prime",
-    toMcpArgs: (params) => ({
-      search_query: params.query,
-      search_domain_filter: params.domain_filter,
-      search_recency_filter: params.recency_filter,
-      content_size: params.content_size,
-      location: params.location,
-    }),
+    toMcpArgs: searchArgs,
   },
   reader: {
     name: "z_ai_reader",
@@ -938,7 +943,7 @@ function registerConfiguredTools(pi: ExtensionAPI, servers: ManagedServer[]) {
   }
 }
 
-export const __test = { createServers, getApiKey, hasApiKeySource, serverStatus, truncateForTool, visionArgs };
+export const __test = { createServers, getApiKey, hasApiKeySource, searchArgs, serverStatus, truncateForTool, visionArgs };
 
 export default function zaiMcpExtension(pi: ExtensionAPI) {
   const servers = createServers();

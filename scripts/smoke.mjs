@@ -72,6 +72,15 @@ assert.equal(none.tools.length, 0);
 assert.match(none.warnings.join("\n"), /no Z\.AI MCP servers enabled/);
 
 assert.deepEqual(
+  __test.searchArgs({ query: "current pi docs" }),
+  { search_query: "current pi docs", search_domain_filter: undefined, search_recency_filter: undefined, content_size: "high", location: undefined },
+);
+assert.deepEqual(
+  __test.searchArgs({ query: "current pi docs", content_size: "medium" }),
+  { search_query: "current pi docs", search_domain_filter: undefined, search_recency_filter: undefined, content_size: "medium", location: undefined },
+);
+
+assert.deepEqual(
   __test.visionArgs({ action: "analyze_image", image_source: "@screenshots/app.png", prompt: "describe" }),
   { image_source: "screenshots/app.png", prompt: "describe" },
 );
