@@ -253,13 +253,67 @@ function stringRecord(value: unknown): Record<string, string> | undefined {
   return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
-function readZaiCredential(): { key: string; env?: Record<string, string> } | undefined {
+/**
+ * Built-in pi provider ids that serve Z.AI (Zhipu) keys.
+ *
+ * `zai` is the global ZAI Coding Plan provider and `zai-coding-cn` is the
+ * China-region variant. Both authenticate against Z.AI endpoints, so a key
+ * stored under either provider in auth.json works for the MCP servers.
+ */
+const BUILTIN_ZAI_PROVIDER_IDS = ["zai", "zai-coding-cn"] as const;
+
+/**
+ * Matches baseUrl values that point at Z.AI / Zhipu (BigModel) endpoints.
+ * Covers the official MCP urls (api.z.ai) and the OpenAI-compatible API
+ * (open.bigmodel.cn) that custom models.json providers may use.
+ */
+const ZAI_BASE_URL_RE = /(?:^|\.)(?:z\.ai|bigmodel\.cn)\b/i;
+
+type ZaiCredential = { key: string; env?: Record<string, string> };
+
+function asZaiCredential(value: unknown): ZaiCredential | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const credential = value as { type?: unknown; key?: unknown; env?: unknown };
+  if (credential.type !== "api_key" || typeof credential.key !== "string" || credential.key.length === 0) return undefined;
+  return { key: credential.key, env: stringRecord(credential.env) };
+}
+
+/**
+ * Ordered list of auth.json provider keys that may hold a Z.AI API key.
+ *
+ * Starts with the built-in Z.AI provider ids, then appends any custom
+ * provider from models.json whose baseUrl points at a Z.AI / Zhipu endpoint.
+ */
+function zaiProviderCandidates(): string[] {
+  const candidates = new Set<string>(BUILTIN_ZAI_PROVIDER_IDS);
+
+  try {
+    const raw = readFileSync(join(getAgentDir(), "models.json"), "utf8");
+    const parsed = JSON.parse(raw) as { providers?: Record<string, { baseUrl?: unknown }> };
+    const providers = parsed.providers;
+    if (providers && typeof providers === "object") {
+      for (const [name, config] of Object.entries(providers)) {
+        if (config && typeof config.baseUrl === "string" && ZAI_BASE_URL_RE.test(config.baseUrl)) {
+          candidates.add(name);
+        }
+      }
+    }
+  } catch {
+    // models.json is optional; ignore read/parse failures.
+  }
+
+  return [...candidates];
+}
+
+function readZaiCredential(): ZaiCredential | undefined {
   try {
     const raw = readFileSync(join(getAgentDir(), "auth.json"), "utf8");
-    const parsed = JSON.parse(raw) as { zai?: { type?: unknown; key?: unknown; env?: unknown } };
-    const credential = parsed.zai;
-    if (credential?.type !== "api_key" || typeof credential.key !== "string" || credential.key.length === 0) return undefined;
-    return { key: credential.key, env: stringRecord(credential.env) };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const id of zaiProviderCandidates()) {
+      const credential = asZaiCredential(parsed[id]);
+      if (credential) return credential;
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -271,11 +325,13 @@ function readZaiKeyFromPiAuth(): string | undefined {
 }
 
 function hasApiKeySource(): boolean {
-  return Boolean(process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || readZaiCredential());
+  return Boolean(process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || process.env.ZAI_CODING_CN_API_KEY || readZaiCredential());
 }
 
 function getApiKey(): string | undefined {
-  return process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || readZaiKeyFromPiAuth();
+  return (
+    process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || process.env.ZAI_CODING_CN_API_KEY || readZaiKeyFromPiAuth()
+  );
 }
 
 function unwrapJsonString(text: string): string {
@@ -365,7 +421,7 @@ async function connect(server: ManagedServer): Promise<Client> {
 
     if (server.kind === "http") {
       const apiKey = getApiKey();
-      if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY or run pi /login for the zai provider.");
+      if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or run pi /login for the zai or zai-coding-cn provider.");
       if (!server.url) throw new Error(`Missing URL for ${server.id}`);
       const transport = new StreamableHTTPClientTransport(new URL(server.url), {
         requestInit: {
@@ -378,7 +434,7 @@ async function connect(server: ManagedServer): Promise<Client> {
       await client.connect(transport, { timeout: DEFAULT_TIMEOUT_MS });
     } else {
       const apiKey = getApiKey();
-      if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY or run pi /login for the zai provider.");
+      if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or run pi /login for the zai or zai-coding-cn provider.");
       if (!server.command) throw new Error(`Missing command for ${server.id}`);
       const transport = new StdioClientTransport({
         command: server.command,
@@ -869,8 +925,8 @@ export function registerZaiMcpServers(pi: ExtensionAPI, serverIds: readonly Serv
 
   warnOnceIfMissingApiKey(
     hasApiKeySource,
-    `[${EXTENSION_NAME}] No Z.ai API key found. Set Z_AI_API_KEY/ZAI_API_KEY, ` +
-      `or run pi /login for the zai provider so ${join(getAgentDir(), "auth.json")} contains a zai API key. ` +
+    `[${EXTENSION_NAME}] No Z.ai API key found. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY, ` +
+      `or run pi /login for the zai or zai-coding-cn provider so ${join(getAgentDir(), "auth.json")} contains a Z.ai API key. ` +
       `Z.ai MCP tools will fail until configured.`,
   );
 }

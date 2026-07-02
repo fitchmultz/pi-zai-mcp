@@ -151,19 +151,27 @@ const truncated = await __test.truncateForTool("small", "search", "web_search_pr
 assert.equal(truncated.content, "small");
 assert.deepEqual(truncated.details, { truncated: false });
 
-restoreEnv();
-delete process.env.Z_AI_API_KEY;
-delete process.env.ZAI_API_KEY;
-await assert.rejects(
-  () => loaded.tools[0].execute("call-1", { query: "current pi docs" }, undefined, undefined, {}),
-  /Missing Z\.ai API key/,
-);
+const missingKeyAgentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-missing-key-"));
+try {
+  restoreEnv();
+  delete process.env.Z_AI_API_KEY;
+  delete process.env.ZAI_API_KEY;
+  delete process.env.ZAI_CODING_CN_API_KEY;
+  process.env.PI_CODING_AGENT_DIR = missingKeyAgentDir;
+  await assert.rejects(
+    () => loaded.tools[0].execute("call-1", { query: "current pi docs" }, undefined, undefined, {}),
+    /Missing Z\.ai API key/,
+  );
+} finally {
+  await rm(missingKeyAgentDir, { recursive: true, force: true });
+}
 
 const agentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-auth-"));
 try {
   restoreEnv();
   delete process.env.Z_AI_API_KEY;
   delete process.env.ZAI_API_KEY;
+  delete process.env.ZAI_CODING_CN_API_KEY;
   process.env.PI_CODING_AGENT_DIR = agentDir;
   await mkdir(agentDir, { recursive: true });
   await writeFile(
@@ -178,12 +186,61 @@ try {
   await rm(agentDir, { recursive: true, force: true });
 }
 
+const codingCnAgentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-cn-"));
+try {
+  restoreEnv();
+  delete process.env.Z_AI_API_KEY;
+  delete process.env.ZAI_API_KEY;
+  delete process.env.ZAI_CODING_CN_API_KEY;
+  process.env.PI_CODING_AGENT_DIR = codingCnAgentDir;
+  await mkdir(codingCnAgentDir, { recursive: true });
+  await writeFile(
+    join(codingCnAgentDir, "auth.json"),
+    JSON.stringify({ "zai-coding-cn": { type: "api_key", key: "cn-stored-key" } }),
+    "utf8",
+  );
+  assert.equal(__test.getApiKey(), "cn-stored-key", "should read key stored under the zai-coding-cn provider");
+  process.env.ZAI_CODING_CN_API_KEY = "cn-env-key";
+  assert.equal(__test.getApiKey(), "cn-env-key", "ZAI_CODING_CN_API_KEY env should take precedence");
+} finally {
+  await rm(codingCnAgentDir, { recursive: true, force: true });
+}
+
+const customProviderAgentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-custom-"));
+try {
+  restoreEnv();
+  delete process.env.Z_AI_API_KEY;
+  delete process.env.ZAI_API_KEY;
+  delete process.env.ZAI_CODING_CN_API_KEY;
+  process.env.PI_CODING_AGENT_DIR = customProviderAgentDir;
+  await mkdir(customProviderAgentDir, { recursive: true });
+  await writeFile(
+    join(customProviderAgentDir, "models.json"),
+    JSON.stringify({
+      providers: {
+        "my-zai-proxy": { baseUrl: "https://open.bigmodel.cn/api/paas/v4", api: "openai-completions", models: [{ id: "glm-5.2" }] },
+        "unrelated": { baseUrl: "https://api.example.com/v1", api: "openai-completions", models: [{ id: "gpt-4o" }] },
+      },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(customProviderAgentDir, "auth.json"),
+    JSON.stringify({ "my-zai-proxy": { type: "api_key", key: "custom-zai-key" }, unrelated: { type: "api_key", key: "not-zai" } }),
+    "utf8",
+  );
+  assert.equal(__test.getApiKey(), "custom-zai-key", "should read key from a custom models.json provider pointing at a Z.AI endpoint");
+} finally {
+  await rm(customProviderAgentDir, { recursive: true, force: true });
+}
+
 const commandAgentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-command-auth-"));
 try {
   const marker = join(commandAgentDir, "command-ran");
   restoreEnv();
   delete process.env.Z_AI_API_KEY;
   delete process.env.ZAI_API_KEY;
+  delete process.env.ZAI_CODING_CN_API_KEY;
   process.env.PI_CODING_AGENT_DIR = commandAgentDir;
   await writeFile(
     join(commandAgentDir, "auth.json"),
