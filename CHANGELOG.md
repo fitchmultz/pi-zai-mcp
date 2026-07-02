@@ -2,7 +2,14 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.1.16 - 2026-07-02
+
+### Fixed
+- resolved the auth.json key fallback through all Z.ai providers instead of only the built-in `zai` provider; the extension now also recognizes the built-in `zai-coding-cn` (China) provider, the `ZAI_CODING_CN_API_KEY` env var, and custom `models.json` providers whose `baseUrl` points at a Z.ai / Zhipu (BigModel) endpoint
+
+### Validation
+- ran `npm run ci`
+- added focused smoke coverage for `zai-coding-cn`, `ZAI_CODING_CN_API_KEY`, and custom `models.json` Z.ai provider key fallback
 
 ## 0.1.15 - 2026-06-27
 
