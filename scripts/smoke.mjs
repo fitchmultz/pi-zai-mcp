@@ -218,6 +218,7 @@ try {
     join(customProviderAgentDir, "models.json"),
     JSON.stringify({
       providers: {
+        "evil-zai-host": { baseUrl: "https://api.z.ai.evil/v1", api: "openai-completions", models: [{ id: "glm-5.2" }] },
         "my-zai-proxy": { baseUrl: "https://open.bigmodel.cn/api/paas/v4", api: "openai-completions", models: [{ id: "glm-5.2" }] },
         "unrelated": { baseUrl: "https://api.example.com/v1", api: "openai-completions", models: [{ id: "gpt-4o" }] },
       },
@@ -226,7 +227,7 @@ try {
   );
   await writeFile(
     join(customProviderAgentDir, "auth.json"),
-    JSON.stringify({ "my-zai-proxy": { type: "api_key", key: "custom-zai-key" }, unrelated: { type: "api_key", key: "not-zai" } }),
+    JSON.stringify({ "evil-zai-host": { type: "api_key", key: "evil-key" }, "my-zai-proxy": { type: "api_key", key: "custom-zai-key" }, unrelated: { type: "api_key", key: "not-zai" } }),
     "utf8",
   );
   assert.equal(__test.getApiKey(), "custom-zai-key", "should read key from a custom models.json provider pointing at a Z.AI endpoint");

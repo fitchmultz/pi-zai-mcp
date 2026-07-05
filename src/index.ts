@@ -253,21 +253,8 @@ function stringRecord(value: unknown): Record<string, string> | undefined {
   return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
-/**
- * Built-in pi provider ids that serve Z.AI (Zhipu) keys.
- *
- * `zai` is the global ZAI Coding Plan provider and `zai-coding-cn` is the
- * China-region variant. Both authenticate against Z.AI endpoints, so a key
- * stored under either provider in auth.json works for the MCP servers.
- */
-const BUILTIN_ZAI_PROVIDER_IDS = ["zai", "zai-coding-cn"] as const;
-
-/**
- * Matches baseUrl values that point at Z.AI / Zhipu (BigModel) endpoints.
- * Covers the official MCP urls (api.z.ai) and the OpenAI-compatible API
- * (open.bigmodel.cn) that custom models.json providers may use.
- */
-const ZAI_BASE_URL_RE = /(?:^|\.)(?:z\.ai|bigmodel\.cn)\b/i;
+const ZAI_PROVIDER_IDS = ["zai", "zai-coding-cn"] as const;
+const ZAI_HOSTS = ["z.ai", "bigmodel.cn"] as const;
 
 type ZaiCredential = { key: string; env?: Record<string, string> };
 
@@ -278,14 +265,18 @@ function asZaiCredential(value: unknown): ZaiCredential | undefined {
   return { key: credential.key, env: stringRecord(credential.env) };
 }
 
-/**
- * Ordered list of auth.json provider keys that may hold a Z.AI API key.
- *
- * Starts with the built-in Z.AI provider ids, then appends any custom
- * provider from models.json whose baseUrl points at a Z.AI / Zhipu endpoint.
- */
+function isZaiBaseUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return ZAI_HOSTS.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+  } catch {
+    return false;
+  }
+}
+
 function zaiProviderCandidates(): string[] {
-  const candidates = new Set<string>(BUILTIN_ZAI_PROVIDER_IDS);
+  const candidates = new Set<string>(ZAI_PROVIDER_IDS);
 
   try {
     const raw = readFileSync(join(getAgentDir(), "models.json"), "utf8");
@@ -293,13 +284,11 @@ function zaiProviderCandidates(): string[] {
     const providers = parsed.providers;
     if (providers && typeof providers === "object") {
       for (const [name, config] of Object.entries(providers)) {
-        if (config && typeof config.baseUrl === "string" && ZAI_BASE_URL_RE.test(config.baseUrl)) {
-          candidates.add(name);
-        }
+        if (config && isZaiBaseUrl(config.baseUrl)) candidates.add(name);
       }
     }
   } catch {
-    // models.json is optional; ignore read/parse failures.
+    // optional
   }
 
   return [...candidates];
