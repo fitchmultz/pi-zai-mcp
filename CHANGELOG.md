@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.17 - 2026-07-11
+
+### Fixed
+- raced Pi cancellation against the full MCP connection lifecycle and close failed/cancelled transports, preventing leaked HTTP connections or vision child processes before retry
+- bounded remote HTTP session termination during shutdown and always close transports so reload/exit cannot hang on the DELETE request
+- matched the Pi 0.80.6 five-argument tool execute contract explicitly across all four curated tools
+
+### Changed
+- updated the tested Pi development baseline and compatibility guidance to 0.80.6
+- refreshed local Pi/type dependencies and added smoke assertions for execute order and prompt-routing metadata across all declared tool entrypoints
+
 ## 0.1.16 - 2026-07-02
 
 ### Fixed

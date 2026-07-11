@@ -28,6 +28,7 @@ const EXTENSION_NAME = "pi-zai-mcp";
 const require = createRequire(import.meta.url);
 const { version: EXTENSION_VERSION } = require("../package.json") as { version: string };
 const DEFAULT_TIMEOUT_MS = positiveIntegerFromEnv("Z_AI_MCP_TIMEOUT_MS", 180_000);
+const SHUTDOWN_TIMEOUT_MS = 1_000;
 
 type ToolUpdate = {
   content: Array<{ type: "text"; text: string }>;
@@ -401,52 +402,79 @@ async function truncateForTool(
   return { content: truncation.content + notice, details: { truncated: true, file } };
 }
 
-async function connect(server: ManagedServer): Promise<Client> {
+type Connection = {
+  client: Client;
+  transport: StreamableHTTPClientTransport | StdioClientTransport;
+};
+
+async function connectWith(
+  server: ManagedServer,
+  signal: AbortSignal | undefined,
+  createConnection: () => Connection,
+): Promise<Client> {
   if (server.client) return server.client;
   if (server.connectPromise) return server.connectPromise;
 
-  server.connectPromise = (async () => {
-    const client = new Client({ name: EXTENSION_NAME, version: EXTENSION_VERSION });
+  const attempt = (async () => {
+    let connection: Connection | undefined;
+    try {
+      connection = createConnection();
+      server.transport = connection.transport;
+      await withAbort(
+        connection.client.connect(connection.transport, { signal, timeout: DEFAULT_TIMEOUT_MS }),
+        signal,
+        "Tool call was cancelled while connecting to Z.AI MCP.",
+      );
+      server.client = connection.client;
+      server.lastError = undefined;
+      return connection.client;
+    } catch (error) {
+      await connection?.transport.close().catch(() => undefined);
+      if (!connection || server.transport === connection.transport) {
+        server.client = undefined;
+        server.transport = undefined;
+      }
+      server.lastError = error instanceof Error ? error.message : String(error);
+      throw error;
+    }
+  })();
+  server.connectPromise = attempt;
 
+  try {
+    return await attempt;
+  } catch (error) {
+    if (server.connectPromise === attempt) server.connectPromise = undefined;
+    throw error;
+  }
+}
+
+async function connect(server: ManagedServer, signal?: AbortSignal): Promise<Client> {
+  return connectWith(server, signal, () => {
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or run pi /login for the zai or zai-coding-cn provider.");
+
+    const client = new Client({ name: EXTENSION_NAME, version: EXTENSION_VERSION });
     if (server.kind === "http") {
-      const apiKey = getApiKey();
-      if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or run pi /login for the zai or zai-coding-cn provider.");
       if (!server.url) throw new Error(`Missing URL for ${server.id}`);
-      const transport = new StreamableHTTPClientTransport(new URL(server.url), {
-        requestInit: {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-          },
-        },
-      });
-      server.transport = transport;
-      await client.connect(transport, { timeout: DEFAULT_TIMEOUT_MS });
-    } else {
-      const apiKey = getApiKey();
-      if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or run pi /login for the zai or zai-coding-cn provider.");
-      if (!server.command) throw new Error(`Missing command for ${server.id}`);
-      const transport = new StdioClientTransport({
+      return {
+        client,
+        transport: new StreamableHTTPClientTransport(new URL(server.url), {
+          requestInit: { headers: { Authorization: `Bearer ${apiKey}` } },
+        }),
+      };
+    }
+
+    if (!server.command) throw new Error(`Missing command for ${server.id}`);
+    return {
+      client,
+      transport: new StdioClientTransport({
         command: server.command,
         args: server.args,
         env: { ...server.env, Z_AI_API_KEY: apiKey },
         stderr: "pipe",
-      });
-      server.transport = transport;
-      await client.connect(transport, { timeout: DEFAULT_TIMEOUT_MS });
-    }
-
-    server.client = client;
-    server.lastError = undefined;
-    return client;
-  })();
-
-  try {
-    return await server.connectPromise;
-  } catch (error) {
-    server.connectPromise = undefined;
-    server.lastError = error instanceof Error ? error.message : String(error);
-    throw error;
-  }
+      }),
+    };
+  });
 }
 
 function abortError(message: string): Error {
@@ -459,7 +487,10 @@ function throwIfAborted(signal: AbortSignal | undefined, message: string): void 
 
 function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined, message: string): Promise<T> {
   if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(abortError(message));
+  if (signal.aborted) {
+    promise.catch(() => undefined);
+    return Promise.reject(abortError(message));
+  }
 
   return new Promise<T>((resolve, reject) => {
     const cleanup = () => signal.removeEventListener("abort", onAbort);
@@ -508,7 +539,7 @@ async function callMcpTool(
 ) {
   throwIfAborted(signal, "Tool call was cancelled before it started.");
   onProgress?.(`Connecting to ${server.label}...`);
-  const client = await connect(server);
+  const client = await connect(server, signal);
   throwIfAborted(signal, "Tool call was cancelled before it reached Z.AI MCP.");
   onProgress?.(`Calling ${server.label} ${toolName}...`);
 
@@ -747,7 +778,7 @@ const REGISTRARS = {
     promptSnippet: "Search the web with Z.AI Web Search MCP using query, domain, recency, summary-size, and region filters",
     promptGuidelines: [
       "Use z_ai_search when the user needs current web information or external documentation beyond the local repo.",
-      "Default content_size is high for more context; specify medium when lower quota use is more important.",
+      "For z_ai_search, content_size defaults to high for more context; specify medium when lower quota use is more important.",
       "Keep z_ai_search queries focused; use domain_filter for known sites and recency_filter for time-sensitive questions.",
     ],
     parameters: SEARCH_SCHEMA,
@@ -836,22 +867,38 @@ function registerCuratedTool(pi: ExtensionAPI, server: ManagedServer, config: Cu
     parameters: config.parameters,
     renderCall: config.renderCall,
     renderResult: config.renderResult,
-    async execute(_toolCallId, params, signal, onUpdate) {
+    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
       return executeCuratedTool(server, config.toMcpToolName(params), config.toMcpArgs(params), signal, onUpdate);
     },
   });
 }
 
-async function closeServers(servers: ManagedServer[]) {
+async function settleWithin(promise: Promise<unknown>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    promise.catch(() => undefined),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    }),
+  ]);
+  if (timer) clearTimeout(timer);
+}
+
+async function closeServers(servers: ManagedServer[], terminateTimeoutMs = SHUTDOWN_TIMEOUT_MS) {
   await Promise.allSettled(
     servers.map(async (server) => {
-      if (server.transport instanceof StreamableHTTPClientTransport) {
-        await server.transport.terminateSession().catch(() => undefined);
+      const transport = server.transport;
+      try {
+        if (server.kind === "http" && transport) {
+          await settleWithin((transport as StreamableHTTPClientTransport).terminateSession(), terminateTimeoutMs);
+        }
+      } finally {
+        await transport?.close().catch(() => undefined);
+        server.client = undefined;
+        server.transport = undefined;
+        server.connectPromise = undefined;
+        server.callQueue = undefined;
       }
-      await server.transport?.close().catch(() => undefined);
-      server.client = undefined;
-      server.transport = undefined;
-      server.connectPromise = undefined;
     }),
   );
 }
@@ -925,7 +972,7 @@ export function createZaiMcpExtension(pi: ExtensionAPI) {
   registerZaiMcpStatusCommand(pi);
 }
 
-export const __test = { activeServerStatus, createServers, getApiKey, hasApiKeySource, resetGlobalStateForTests, searchArgs, serverStatus, truncateForTool, visionArgs };
+export const __test = { activeServerStatus, closeServers, connectWith, createServers, getApiKey, hasApiKeySource, resetGlobalStateForTests, searchArgs, serverStatus, truncateForTool, visionArgs };
 
 export default function zaiMcpExtension(pi: ExtensionAPI) {
   createZaiMcpExtension(pi);

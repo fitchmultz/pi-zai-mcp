@@ -88,6 +88,11 @@ assert.match(searchOnly.warnings.join("\n"), /ignoring unknown Z_AI_MCP_SERVERS/
 
 const split = [zaiMcpSearch, zaiMcpReader, zaiMcpZread, zaiMcpVision].flatMap((extension) => loadExtension({}, extension).tools.map((tool) => tool.name));
 assert.deepEqual(split, ["z_ai_search", "z_ai_reader", "z_ai_zread", "z_ai_vision"]);
+for (const tool of loaded.tools) {
+  assert.equal(tool.execute.length, 5, `${tool.name} uses Pi's current execute(id, params, signal, onUpdate, ctx) order`);
+  assert.ok(tool.promptSnippet, `${tool.name} declares prompt routing metadata`);
+  assert.ok(tool.promptGuidelines.every((guideline) => guideline.includes(tool.name)), `${tool.name} names itself in every prompt guideline`);
+}
 assert.deepEqual(loadExtension({ Z_AI_MCP_SERVERS: "reader" }, zaiMcpSearch).tools.map((tool) => tool.name), ["z_ai_search"]);
 assert.deepEqual(loadExtension({}, zaiMcpStatus).tools, []);
 
@@ -150,6 +155,72 @@ assert.deepEqual(
 const truncated = await __test.truncateForTool("small", "search", "web_search_prime");
 assert.equal(truncated.content, "small");
 assert.deepEqual(truncated.details, { truncated: false });
+
+const setupPhases = ["transport startup", "initialize", "initialized notification"];
+for (const kind of ["http", "stdio"]) {
+  for (const phase of setupPhases) {
+    let closeCalls = 0;
+    let connectOptions;
+    let reachedPhase;
+    const transport = { close: async () => { closeCalls += 1; } };
+    const client = {
+      connect: async (_transport, options) => {
+        connectOptions = options;
+        for (const current of setupPhases.slice(0, setupPhases.indexOf(phase) + 1)) {
+          await Promise.resolve();
+          reachedPhase = current;
+        }
+        await new Promise(() => undefined);
+      },
+    };
+    const server = { id: kind === "http" ? "search" : "vision", label: phase, kind };
+    const controller = new AbortController();
+    const connecting = __test.connectWith(server, controller.signal, () => ({ client, transport }));
+    while (reachedPhase !== phase) await Promise.resolve();
+    controller.abort();
+    await assert.rejects(connecting, /cancelled while connecting/);
+    assert.equal(connectOptions.signal, controller.signal, `${kind} ${phase} receives Pi cancellation`);
+    assert.equal(closeCalls, 1, `${kind} ${phase} cancellation closes its transport`);
+    assert.equal(server.client, undefined);
+    assert.equal(server.transport, undefined);
+    assert.equal(server.connectPromise, undefined);
+  }
+}
+
+{
+  let hangingCloseCalls = 0;
+  let rejectedCloseCalls = 0;
+  const hanging = {
+    id: "search",
+    label: "hanging HTTP shutdown",
+    kind: "http",
+    client: {},
+    transport: {
+      terminateSession: () => new Promise(() => undefined),
+      close: async () => { hangingCloseCalls += 1; },
+    },
+    connectPromise: new Promise(() => undefined),
+    callQueue: new Promise(() => undefined),
+  };
+  const rejected = {
+    id: "reader",
+    label: "rejected HTTP shutdown",
+    kind: "http",
+    transport: {
+      terminateSession: async () => { throw new Error("delete failed"); },
+      close: async () => { rejectedCloseCalls += 1; },
+    },
+  };
+  const started = Date.now();
+  await __test.closeServers([hanging, rejected], 20);
+  assert.ok(Date.now() - started < 500, "shutdown remains bounded when HTTP DELETE never settles");
+  assert.equal(hangingCloseCalls, 1, "timed-out HTTP termination still closes transport");
+  assert.equal(rejectedCloseCalls, 1, "failed HTTP termination still closes transport");
+  assert.equal(hanging.client, undefined);
+  assert.equal(hanging.transport, undefined);
+  assert.equal(hanging.connectPromise, undefined);
+  assert.equal(hanging.callQueue, undefined, "shutdown resets the per-server call queue");
+}
 
 const missingKeyAgentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-missing-key-"));
 try {

@@ -41,7 +41,7 @@ Install from GitHub:
 pi install https://github.com/fitchmultz/pi-zai-mcp
 ```
 
-Compatibility note: this release is tested against pi `0.80.2`, which is the suggested minimum baseline for this package version. Pi-bundled runtime packages are declared as optional wildcard peers, so npm peer ranges do not hard-block users from trying newer pi releases; runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
+Compatibility note: this release is tested against pi `0.80.6`, which is the suggested minimum baseline for this package version. Pi-bundled runtime packages are declared as optional wildcard peers, so npm peer ranges do not hard-block users from trying newer pi releases; runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
 
 Try it without installing permanently:
 
@@ -170,7 +170,8 @@ Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When t
 - Calls are serialized per upstream MCP server to avoid transport-level contention when multiple actions target the same Z.AI server at once; queued calls still respect user cancellation.
 - Server connections are lazy by default to avoid blocking pi startup on network or package-manager work; `/zai-mcp-status` reports this explicitly before first use.
 - Upstream MCP error responses are surfaced as failed pi tool calls instead of successful results with error text.
-- `session_shutdown` closes any opened MCP transports.
+- Connection setup and tool calls honor Pi cancellation. Failed or cancelled connection attempts close their HTTP transport or vision child process before a later retry.
+- `session_shutdown` gives remote HTTP MCP session termination one second, then closes every opened transport or vision child process.
 
 ## Security and data flow
 
@@ -200,7 +201,7 @@ pi install -l /path/to/pi-zai-mcp
 
 - Requires a Z.ai API key and network access for real tool calls.
 - The pi-facing API is curated. If upstream MCP schemas or tool names change, update this extension and docs intentionally.
-- Verification currently consists of TypeScript typechecking, a lightweight extension smoke script, npm audit, npm dry-run packing, and pi install smoke checks; there is no broad mocked MCP unit suite yet.
+- Verification consists of TypeScript typechecking, a lightweight extension contract smoke script, npm audit, npm dry-run packing, and isolated pi entrypoint loads; there is no broad mocked MCP integration suite yet.
 
 ## Project map
 
