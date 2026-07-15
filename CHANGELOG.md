@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Changed
+- refreshed the tested Pi development lock and compatibility guidance to 0.80.7
+
 ## 0.1.17 - 2026-07-11
 
 ### Fixed
