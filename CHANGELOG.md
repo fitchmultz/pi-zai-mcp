@@ -2,7 +2,10 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.1.19 - 2026-07-16
+
+### Changed
+- refreshed the tested Pi development lock and compatibility guidance to 0.80.9; the MCP tools do not use the removed SDK model/auth options
 
 ## 0.1.18 - 2026-07-14
 
