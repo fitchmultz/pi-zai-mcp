@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.20 - 2026-08-09
+
+### Security
+- resolved all `npm audit` production findings: bumped `@modelcontextprotocol/sdk` to 1.30.0 with patched transitive `fast-uri`, `ip-address`, and `hono`, and forced `@hono/node-server` >= 2.0.12 tree-wide via npm `overrides`; `@z_ai/mcp-server` stays 0.1.4 (newest) instead of the downgrade `npm audit fix --force` proposed
+- verified the upgraded tree against real behavior: stdio spawn of the bundled `zai-mcp-server`, a full MCP initialize handshake, and `tools/list` returning the complete vision toolset
+
 ## 0.1.19 - 2026-07-16
 
 ### Changed
