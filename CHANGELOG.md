@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.21 - 2026-08-21
+
+### Fixed
+- replaced the `socket-firewall.workos.dev` proxy URLs that leaked into `package-lock.json` (dependency updates made behind a corporate proxy) with `registry.npmjs.org` URLs; integrity hashes are unchanged, so installs from any network work again
+- note: the 0.1.20 npm publish silently failed for this reason, so npm jumped from 0.1.19 directly to 0.1.21
+
 ## 0.1.20 - 2026-08-09
 
 ### Security
