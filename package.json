@@ -34,6 +34,7 @@
     "scripts"
   ],
   "scripts": {
+    "check:compat": "npm run typecheck && npm run smoke && node --experimental-strip-types --test test/native-runtime.test.mjs && npm pack --dry-run",
     "typecheck": "tsc --noEmit",
     "lint": "npm run typecheck",
     "release:dry-run": "npm run ci && npm publish --dry-run",
@@ -45,9 +46,9 @@
     "@z_ai/mcp-server": "0.1.4"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.80.9",
-    "@earendil-works/pi-coding-agent": "^0.80.9",
-    "@earendil-works/pi-tui": "^0.80.9",
+    "@earendil-works/pi-ai": "0.86.1",
+    "@earendil-works/pi-coding-agent": "0.86.1",
+    "@earendil-works/pi-tui": "0.86.1",
     "@types/node": "^24.13.3",
     "typebox": "^1.3.6",
     "typescript": "^6.0.3"
