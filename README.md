@@ -183,7 +183,7 @@ Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When t
 
 ## Verify this repo
 
-The current source qualification baseline is official Pi **0.86.1** (the published-release note above describes the earlier artifact). `npm ci --ignore-scripts` then `npm run check:compat` runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, reload/shutdown cleanup, and dry-run packing. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai or starts the vision service; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
+The current development baseline is official Pi **0.99.1**, with offline compatibility checks against both official Pi and the maintained fork (the published-release note above describes the earlier artifact). `npm ci --ignore-scripts` then `npm run check:compat` runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, a loopback MCP search call, connected-session termination on reload, shutdown cleanup, and dry-run packing. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai or starts the vision service; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
 
 ```bash
 npm install
