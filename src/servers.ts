@@ -30,6 +30,9 @@ export type ManagedServer = ServerConfig & {
   connectPromise?: Promise<Client>;
   callQueue?: Promise<void>;
   lastError?: string;
+  closed?: boolean;
+  controller?: AbortController;
+  closePromise?: Promise<void>;
 };
 
 function enabledServerIds(): Set<ServerId> | undefined {

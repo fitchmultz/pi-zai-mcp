@@ -1,6 +1,6 @@
 {
   "name": "pi-zai-mcp",
-  "version": "0.1.21",
+  "version": "0.2.0",
   "description": "Unofficial pi package that exposes Z.ai MCP server tools for web search, URL reading, repository reading, and vision workflows.",
   "type": "module",
   "author": "Mitch Fultz (https://github.com/fitchmultz)",
@@ -29,6 +29,7 @@
     "extensions",
     "src",
     "README.md",
+    "PI_1_0_QUALIFICATION.md",
     "CHANGELOG.md",
     "LICENSE",
     "scripts"
@@ -46,9 +47,9 @@
     "@z_ai/mcp-server": "0.1.4"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "0.99.1",
-    "@earendil-works/pi-coding-agent": "0.99.1",
-    "@earendil-works/pi-tui": "0.99.1",
+    "@earendil-works/pi-ai": "1.0.0",
+    "@earendil-works/pi-coding-agent": "1.0.0",
+    "@earendil-works/pi-tui": "1.0.0",
     "@types/node": "^24.13.3",
     "typebox": "1.3.27",
     "typescript": "^6.0.3"
