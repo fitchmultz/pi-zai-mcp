@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## 0.2.0 - Pending release
+## 0.2.0 - 2026-10-01
 
 - Modernize the development cohort and suggested support floor to Pi 1.0.0, retaining optional wildcard host peers and all four curated paid MCP workflows.
 - Use the root `StringEnum` export and current host registry authentication. Preserve explicit service-key alias precedence, built-in/global/China provider ordering and configured Z.AI catalog aliases; remove duplicate credential-file parsing and synchronous auth-command execution.
