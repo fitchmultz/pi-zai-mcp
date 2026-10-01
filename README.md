@@ -41,7 +41,7 @@ Install from GitHub:
 pi install https://github.com/fitchmultz/pi-zai-mcp
 ```
 
-Compatibility note: this release is tested against pi `0.80.9`, which is the suggested minimum baseline for this package version. Pi-bundled runtime packages are declared as optional wildcard peers, so npm peer ranges do not hard-block users from trying newer pi releases; runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
+Compatibility: Pi **1.0.0** is the supported development baseline and suggested minimum. Host runtime packages remain optional wildcard peers rather than hard peer/engines pins. Official Pi and the maintained fork require separate qualification; a future fork candidate is not certified by the official checks.
 
 Try it without installing permanently:
 
@@ -69,7 +69,7 @@ pi -e .
 | `Z_AI_MCP_TIMEOUT_MS` | No | `180000` | Per-connection/tool-call timeout in milliseconds; vision and repository-search actions can take longer than ordinary search/read calls. |
 | `Z_AI_MODE` | No | `ZAI` | Passed through to the vision MCP server; Z.AI docs list `ZAI` as the supported value. |
 
-\* If env vars are unset, the extension falls back to the first available Z.ai API key stored in `auth.json` (usually `~/.pi/agent/auth.json`; `PI_CODING_AGENT_DIR` is honored). It checks pi's built-in Z.ai providers — `zai` (global) and `zai-coding-cn` (China) — and any custom provider in `models.json` whose `baseUrl` points at a Z.ai / Zhipu (BigModel) endpoint. Run `/login` in pi and choose a ZAI provider to store this key.
+\* If env vars are unset, the extension asks the current Pi model registry to resolve the first available Z.ai provider API key. Pi owns its selected agent directory, stored credentials, templates, command resolution and caching. It checks `zai` (global), then `zai-coding-cn` (China), then configured catalog aliases whose `baseUrl` points at a Z.ai / Zhipu (BigModel) endpoint. Header-only model authentication does not replace this external service's required bearer API key. Run `/login` in pi and choose a ZAI provider to store this key.
 
 Example: disable vision server access for a lighter setup: run `pi config`, open package resources for `pi-zai-mcp`, and disable `extensions/zai-mcp-vision.ts`.
 
@@ -171,19 +171,20 @@ Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When t
 - Server connections are lazy by default to avoid blocking pi startup on network or package-manager work; `/zai-mcp-status` reports this explicitly before first use.
 - Upstream MCP error responses are surfaced as failed pi tool calls instead of successful results with error text.
 - Connection setup and tool calls honor Pi cancellation. Failed or cancelled connection attempts close their HTTP transport or vision child process before a later retry.
-- `session_shutdown` gives remote HTTP MCP session termination one second, then closes every opened transport or vision child process.
+- `session_shutdown` cancels owned setup/calls, gives remote HTTP session termination one second, then closes each owned transport or vision child process once. Late setup and queued calls cannot revive a shutdown connection.
+- Native programmatic callers receive a stable `{server, tool, text, truncated, file?}` outcome using the same bounded text and existing saved-file reference. Private/raw MCP details are not newly exposed.
 
 ## Security and data flow
 
 - Pi extensions run with your local user permissions. Review code before installing any third-party pi package.
-- The extension reads `Z_AI_API_KEY`, `ZAI_API_KEY`, or `ZAI_CODING_CN_API_KEY` from the environment, or falls back to a Z.ai provider key in `auth.json` (built-in `zai` / `zai-coding-cn`, or a custom `models.json` provider whose `baseUrl` points at a Z.ai endpoint); it does not store credentials itself.
+- The extension reads the explicit service aliases `Z_AI_API_KEY`, `ZAI_API_KEY`, or `ZAI_CODING_CN_API_KEY`, or asks the current Pi registry for a Z.ai provider API key; it neither parses credential files nor executes auth commands itself. It stores no credentials.
 - HTTP MCP calls send the key as a Bearer token to Z.ai MCP endpoints.
 - Vision calls start a local stdio MCP server and pass the key in that child process environment.
 - Truncated full outputs are written under your OS temp directory, not this repo.
 
 ## Verify this repo
 
-The current development baseline is official Pi **0.99.1**, with offline compatibility checks against both official Pi and the maintained fork (the published-release note above describes the earlier artifact). `npm ci --ignore-scripts` then `npm run check:compat` runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, a loopback MCP search call, connected-session termination on reload, shutdown cleanup, and dry-run packing. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai or starts the vision service; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
+The development baseline is official Pi **1.0.0**. Qualification results and remaining fork/live checks are recorded in [Pi 1.0 qualification](PI_1_0_QUALIFICATION.md). `npm ci --ignore-scripts` then `npm run check:compat` runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, a loopback MCP search call, connected-session termination on reload, shutdown cleanup, and dry-run packing. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai or starts the vision service; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
 
 ```bash
 npm install

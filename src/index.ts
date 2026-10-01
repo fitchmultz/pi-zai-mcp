@@ -3,20 +3,17 @@ import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
   formatSize,
-  getAgentDir,
   highlightCode,
   keyHint,
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai/compat";
+import { StringEnum } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Type } from "typebox";
-import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,14 +26,17 @@ const require = createRequire(import.meta.url);
 const { version: EXTENSION_VERSION } = require("../package.json") as { version: string };
 const DEFAULT_TIMEOUT_MS = positiveIntegerFromEnv("Z_AI_MCP_TIMEOUT_MS", 180_000);
 const SHUTDOWN_TIMEOUT_MS = 1_000;
+const CURATED_OUTCOME_SCHEMA = Type.Object({
+  server: Type.String(),
+  tool: Type.String(),
+  text: Type.String(),
+  truncated: Type.Boolean(),
+  file: Type.Optional(Type.String()),
+}, { additionalProperties: false });
 
 type ToolUpdate = {
   content: Array<{ type: "text"; text: string }>;
   details: Record<string, unknown>;
-};
-
-type ToolRenderContext = {
-  args?: Record<string, unknown>;
 };
 
 type ZreadAction = "search_doc" | "read_file" | "get_repo_structure";
@@ -171,103 +171,11 @@ function positiveIntegerFromEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
 }
 
-const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
-const AUTH_COMMAND_CACHE = new Map<string, string | undefined>();
-
-function resolveAuthKeyTemplate(value: string, env?: Record<string, string>): string | undefined {
-  let resolved = "";
-  let index = 0;
-
-  while (index < value.length) {
-    const dollarIndex = value.indexOf("$", index);
-    if (dollarIndex < 0) return resolved + value.slice(index);
-
-    resolved += value.slice(index, dollarIndex);
-    const next = value[dollarIndex + 1];
-
-    if (next === "$" || next === "!") {
-      resolved += next;
-      index = dollarIndex + 2;
-      continue;
-    }
-
-    if (next === "{") {
-      const end = value.indexOf("}", dollarIndex + 2);
-      if (end < 0) {
-        resolved += "$";
-        index = dollarIndex + 1;
-        continue;
-      }
-      const name = value.slice(dollarIndex + 2, end);
-      if (!ENV_VAR_NAME_RE.test(name)) {
-        resolved += value.slice(dollarIndex, end + 1);
-        index = end + 1;
-        continue;
-      }
-      const replacement = env?.[name] ?? process.env[name];
-      if (replacement === undefined) return undefined;
-      resolved += replacement;
-      index = end + 1;
-      continue;
-    }
-
-    const match = value.slice(dollarIndex + 1).match(ENV_VAR_NAME_PREFIX_RE);
-    if (!match) {
-      resolved += "$";
-      index = dollarIndex + 1;
-      continue;
-    }
-
-    const replacement = env?.[match[0]] ?? process.env[match[0]];
-    if (replacement === undefined) return undefined;
-    resolved += replacement;
-    index = dollarIndex + 1 + match[0].length;
-  }
-
-  return resolved;
-}
-
-function resolveAuthKey(value: string, env?: Record<string, string>): string | undefined {
-  if (value.startsWith("!")) {
-    if (AUTH_COMMAND_CACHE.has(value)) return AUTH_COMMAND_CACHE.get(value);
-    let result: string | undefined;
-    try {
-      const output = execSync(value.slice(1), {
-        encoding: "utf8",
-        timeout: 10_000,
-        stdio: ["ignore", "pipe", "ignore"],
-      });
-      result = output.trim() || undefined;
-    } catch {
-      result = undefined;
-    }
-    AUTH_COMMAND_CACHE.set(value, result);
-    return result;
-  }
-
-  return resolveAuthKeyTemplate(value, env);
-}
-
-function stringRecord(value: unknown): Record<string, string> | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
-}
-
 const ZAI_PROVIDER_IDS = ["zai", "zai-coding-cn"] as const;
 const ZAI_HOSTS = ["z.ai", "bigmodel.cn"] as const;
+type Registry = ExtensionContext["modelRegistry"];
 
-type ZaiCredential = { key: string; env?: Record<string, string> };
-
-function asZaiCredential(value: unknown): ZaiCredential | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const credential = value as { type?: unknown; key?: unknown; env?: unknown };
-  if (credential.type !== "api_key" || typeof credential.key !== "string" || credential.key.length === 0) return undefined;
-  return { key: credential.key, env: stringRecord(credential.env) };
-}
-
-function isZaiBaseUrl(value: unknown): boolean {
-  if (typeof value !== "string") return false;
+function isZaiBaseUrl(value: string): boolean {
   try {
     const host = new URL(value).hostname.toLowerCase();
     return ZAI_HOSTS.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
@@ -276,52 +184,28 @@ function isZaiBaseUrl(value: unknown): boolean {
   }
 }
 
-function zaiProviderCandidates(): string[] {
-  const candidates = new Set<string>(ZAI_PROVIDER_IDS);
+function zaiProviderCandidates(registry: Registry): string[] {
+  return [...new Set([...ZAI_PROVIDER_IDS, ...registry.getAll().filter(model => isZaiBaseUrl(model.baseUrl)).map(model => model.provider)])];
+}
 
-  try {
-    const raw = readFileSync(join(getAgentDir(), "models.json"), "utf8");
-    const parsed = JSON.parse(raw) as { providers?: Record<string, { baseUrl?: unknown }> };
-    const providers = parsed.providers;
-    if (providers && typeof providers === "object") {
-      for (const [name, config] of Object.entries(providers)) {
-        if (config && isZaiBaseUrl(config.baseUrl)) candidates.add(name);
-      }
-    }
-  } catch {
-    // optional
+function serviceKey(): string | undefined {
+  return process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || process.env.ZAI_CODING_CN_API_KEY;
+}
+
+function hasApiKeySource(registry: Registry): boolean {
+  return Boolean(serviceKey() || zaiProviderCandidates(registry).some(id => registry.getProviderAuthStatus(id).configured));
+}
+
+async function getApiKey(registry: Registry): Promise<string | undefined> {
+  const explicit = serviceKey();
+  if (explicit) return explicit;
+  for (const id of zaiProviderCandidates(registry)) {
+    // Provider auth owns stored templates, commands, environment and refresh.
+    // The external MCP service still specifically needs a bearer API key.
+    const key = (await registry.getProviderAuth(id))?.auth.apiKey;
+    if (key) return key;
   }
-
-  return [...candidates];
-}
-
-function readZaiCredential(): ZaiCredential | undefined {
-  try {
-    const raw = readFileSync(join(getAgentDir(), "auth.json"), "utf8");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    for (const id of zaiProviderCandidates()) {
-      const credential = asZaiCredential(parsed[id]);
-      if (credential) return credential;
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function readZaiKeyFromPiAuth(): string | undefined {
-  const credential = readZaiCredential();
-  return credential ? resolveAuthKey(credential.key, credential.env) : undefined;
-}
-
-function hasApiKeySource(): boolean {
-  return Boolean(process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || process.env.ZAI_CODING_CN_API_KEY || readZaiCredential());
-}
-
-function getApiKey(): string | undefined {
-  return (
-    process.env.Z_AI_API_KEY || process.env.ZAI_API_KEY || process.env.ZAI_CODING_CN_API_KEY || readZaiKeyFromPiAuth()
-  );
+  return undefined;
 }
 
 function unwrapJsonString(text: string): string {
@@ -410,26 +294,34 @@ type Connection = {
 async function connectWith(
   server: ManagedServer,
   signal: AbortSignal | undefined,
-  createConnection: () => Connection,
+  createConnection: () => Connection | Promise<Connection>,
 ): Promise<Client> {
+  if (server.closed) throw new Error("Z.AI MCP connection owner has shut down.");
   if (server.client) return server.client;
   if (server.connectPromise) return server.connectPromise;
+  server.controller ??= new AbortController();
+  signal = signal ? AbortSignal.any([signal, server.controller.signal]) : server.controller.signal;
 
   const attempt = (async () => {
     let connection: Connection | undefined;
+    let published = false;
     try {
-      connection = createConnection();
+      connection = await createConnection();
+      throwIfAborted(signal, "Tool call was cancelled while preparing Z.AI MCP authentication.");
       server.transport = connection.transport;
+      published = true;
       await withAbort(
         connection.client.connect(connection.transport, { signal, timeout: DEFAULT_TIMEOUT_MS }),
         signal,
         "Tool call was cancelled while connecting to Z.AI MCP.",
       );
+      throwIfAborted(signal, "Tool call was cancelled while connecting to Z.AI MCP.");
+      if (server.closed) throw new Error("Z.AI MCP connection owner has shut down.");
       server.client = connection.client;
       server.lastError = undefined;
       return connection.client;
     } catch (error) {
-      await connection?.transport.close().catch(() => undefined);
+      if (connection && (!published || !server.closed)) await connection.transport.close().catch(() => undefined);
       if (!connection || server.transport === connection.transport) {
         server.client = undefined;
         server.transport = undefined;
@@ -448,9 +340,9 @@ async function connectWith(
   }
 }
 
-async function connect(server: ManagedServer, signal?: AbortSignal): Promise<Client> {
-  return connectWith(server, signal, () => {
-    const apiKey = getApiKey();
+async function connect(server: ManagedServer, registry: Registry, signal?: AbortSignal): Promise<Client> {
+  return connectWith(server, signal, async () => {
+    const apiKey = await getApiKey(registry);
     if (!apiKey) throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or run pi /login for the zai or zai-coding-cn provider.");
 
     const client = new Client({ name: EXTENSION_NAME, version: EXTENSION_VERSION });
@@ -516,6 +408,7 @@ async function runExclusive<T>(server: ManagedServer, signal: AbortSignal | unde
   const previous = server.callQueue ?? Promise.resolve();
   const run = previous.catch(() => undefined).then(() => {
     throwIfAborted(signal, "Tool call was cancelled before it started.");
+    if (server.closed) throw new Error("Z.AI MCP connection owner has shut down.");
     return operation();
   });
   const queueTail = run.then(
@@ -534,12 +427,15 @@ async function callMcpTool(
   server: ManagedServer,
   toolName: string,
   args: Record<string, unknown>,
+  registry: Registry,
   signal: AbortSignal | undefined,
   onProgress?: (message: string) => void,
 ) {
+  server.controller ??= new AbortController();
+  signal = signal ? AbortSignal.any([signal, server.controller.signal]) : server.controller.signal;
   throwIfAborted(signal, "Tool call was cancelled before it started.");
   onProgress?.(`Connecting to ${server.label}...`);
-  const client = await connect(server, signal);
+  const client = await connect(server, registry, signal);
   throwIfAborted(signal, "Tool call was cancelled before it reached Z.AI MCP.");
   onProgress?.(`Calling ${server.label} ${toolName}...`);
 
@@ -571,6 +467,7 @@ async function executeCuratedTool(
   server: ManagedServer,
   toolName: string,
   args: Record<string, unknown>,
+  registry: Registry,
   signal: AbortSignal | undefined,
   onUpdate: ((result: ToolUpdate) => void) | undefined,
 ) {
@@ -583,12 +480,16 @@ async function executeCuratedTool(
 
   update(server.callQueue ? `Waiting for another ${server.label} call to finish...` : `Starting ${server.label} ${toolName}...`);
 
-  const result = await runExclusive(server, signal, () => callMcpTool(server, toolName, cleanArgs(args), signal, update));
+  const result = await runExclusive(server, signal, () => callMcpTool(server, toolName, cleanArgs(args), registry, signal, update));
   const text = summarizeMcpResult(result);
   if (isMcpErrorResult(result)) throw new Error(`Z.AI MCP ${server.id}/${toolName} failed:\n${text}`);
   const truncated = await truncateForTool(text, server.id, toolName);
   return {
     content: [{ type: "text" as const, text: truncated.content }],
+    structuredContent: {
+      server: server.id, tool: toolName, text: truncated.content,
+      ...truncated.details,
+    },
     details: { server: server.id, tool: toolName, truncated: truncated.details },
   };
 }
@@ -634,7 +535,7 @@ function renderCuratedResult(
   result: { content?: Array<{ type: string; text?: string }>; details?: unknown },
   options: { expanded?: boolean; isPartial?: boolean },
   theme: { fg(color: string, text: string): string },
-  context?: ToolRenderContext,
+  context?: Parameters<NonNullable<ToolDefinition<any>["renderResult"]>>[3],
 ) {
   const details = result.details as
     | { server?: string; tool?: string; progress?: string; truncated?: { truncated?: boolean; file?: string } }
@@ -642,7 +543,7 @@ function renderCuratedResult(
 
   if (options.isPartial) {
     const progress = firstTextContent(result) || details?.progress || "Starting Z.AI MCP call...";
-    const target = details?.server || details?.tool ? `${details?.server ?? "z_ai"}/${details?.tool ?? "tool"}` : String(context?.args?.action ?? "Z.AI MCP");
+    const target = details?.server || details?.tool ? `${details?.server ?? "z_ai"}/${details?.tool ?? "tool"}` : String(context?.args !== null && typeof context?.args === "object" && "action" in context.args ? context.args.action : "Z.AI MCP");
     return new Text(`${theme.fg("warning", "running")} ${theme.fg("dim", target)}\n${theme.fg("toolOutput", progress)}`, 0, 0);
   }
 
@@ -654,7 +555,8 @@ function renderCuratedResult(
   const limited = limitedLines(byteLimited, lineLimit);
   const body = language ? highlightCode(limited.text, language).join("\n") : theme.fg("toolOutput", limited.text);
 
-  const status = details?.truncated?.truncated ? theme.fg("warning", "truncated for agent context") : theme.fg("success", "done");
+  const status = context?.isError ? theme.fg("error", "failed")
+    : details?.truncated?.truncated ? theme.fg("warning", "truncated for agent context") : theme.fg("success", "done");
   let header = `${status} ${theme.fg("dim", `${details?.server ?? "z_ai"}/${details?.tool ?? "tool"}`)}`;
   if (!options.expanded && (limited.omittedLines > 0 || text.length > byteLimit)) {
     header += ` ${theme.fg("muted", `(${keyHint("app.tools.expand", "for more")})`)}`;
@@ -865,10 +767,11 @@ function registerCuratedTool(pi: ExtensionAPI, server: ManagedServer, config: Cu
     promptSnippet: config.promptSnippet,
     promptGuidelines: config.promptGuidelines,
     parameters: config.parameters,
+    outputSchema: CURATED_OUTCOME_SCHEMA,
     renderCall: config.renderCall,
     renderResult: config.renderResult,
-    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-      return executeCuratedTool(server, config.toMcpToolName(params), config.toMcpArgs(params), signal, onUpdate);
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      return executeCuratedTool(server, config.toMcpToolName(params), config.toMcpArgs(params), ctx.modelRegistry, signal, onUpdate);
     },
   });
 }
@@ -887,18 +790,24 @@ async function settleWithin(promise: Promise<unknown>, timeoutMs: number): Promi
 async function closeServers(servers: ManagedServer[], terminateTimeoutMs = SHUTDOWN_TIMEOUT_MS) {
   await Promise.allSettled(
     servers.map(async (server) => {
+      if (server.closePromise) return server.closePromise;
+      server.closed = true;
+      server.controller?.abort();
       const transport = server.transport;
-      try {
-        if (server.kind === "http" && transport) {
-          await settleWithin((transport as StreamableHTTPClientTransport).terminateSession(), terminateTimeoutMs);
+      server.client = undefined;
+      server.transport = undefined;
+      server.connectPromise = undefined;
+      server.callQueue = undefined;
+      server.closePromise = (async () => {
+        try {
+          if (server.kind === "http" && transport) {
+            await settleWithin((transport as StreamableHTTPClientTransport).terminateSession(), terminateTimeoutMs);
+          }
+        } finally {
+          await transport?.close().catch(() => undefined);
         }
-      } finally {
-        await transport?.close().catch(() => undefined);
-        server.client = undefined;
-        server.transport = undefined;
-        server.connectPromise = undefined;
-        server.callQueue = undefined;
-      }
+      })();
+      return server.closePromise;
     }),
   );
 }
@@ -945,6 +854,8 @@ export function registerZaiMcpServers(pi: ExtensionAPI, serverIds: readonly Serv
   registerConfiguredTools(pi, servers);
 
   pi.on("session_start", async (_event, ctx: ExtensionContext) => {
+    warnOnceIfMissingApiKey(() => hasApiKeySource(ctx.modelRegistry),
+      `[${EXTENSION_NAME}] No Z.ai API key found. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or use Pi /login for a Z.AI provider. Z.ai MCP tools will fail until configured.`);
     const failed = servers.filter((server) => server.lastError);
     if (failed.length > 0 && ctx.hasUI) {
       ctx.ui.notify(
@@ -959,12 +870,7 @@ export function registerZaiMcpServers(pi: ExtensionAPI, serverIds: readonly Serv
     removeActiveServers();
   });
 
-  warnOnceIfMissingApiKey(
-    hasApiKeySource,
-    `[${EXTENSION_NAME}] No Z.ai API key found. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY, ` +
-      `or run pi /login for the zai or zai-coding-cn provider so ${join(getAgentDir(), "auth.json")} contains a Z.ai API key. ` +
-      `Z.ai MCP tools will fail until configured.`,
-  );
+
 }
 
 export function createZaiMcpExtension(pi: ExtensionAPI) {

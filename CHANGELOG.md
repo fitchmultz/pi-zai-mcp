@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.0 - 2026-10-01
+
+- Modernize the development cohort and suggested support floor to Pi 1.0.0, retaining optional wildcard host peers and all four curated paid MCP workflows.
+- Use the root `StringEnum` export and current host registry authentication. Preserve explicit service-key alias precedence, built-in/global/China provider ordering and configured Z.AI catalog aliases; remove duplicate credential-file parsing and synchronous auth-command execution.
+- Expose bounded existing curated outcomes through native `outputSchema`/`structuredContent`, without raw/private MCP result expansion.
+- Cancel owned connections/calls and make teardown idempotent; late setup and queued work cannot publish clients after shutdown/replacement.
+- Use native renderer error state so failed calls are labeled failed rather than done; preserve bounded failure text.
+- Refresh existing production transitive dependency patches required by the normal `npm audit --omit=dev` gate; keep the bundled vision server and transport APIs unchanged.
+
 ## 0.1.21 - 2026-08-21
 
 ### Fixed

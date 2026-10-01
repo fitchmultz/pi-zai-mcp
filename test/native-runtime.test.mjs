@@ -39,7 +39,9 @@ test("five native resources share lazy status and release servers on shutdown/re
     }
     const result = message.method === "initialize"
       ? { protocolVersion: message.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "fixture", version: "1" } }
-      : { content: [{ type: "text", text: "Local search result" }] };
+      : message.params.arguments.search_query === "fixture-error"
+        ? { isError: true, content: [{ type: "text", text: "Owned service failure" }] }
+        : { content: [{ type: "text", text: "Local search result" }] };
     if (message.method === "tools/call") calls.push({ auth: req.headers.authorization, params: message.params });
     res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "fixture-session" });
     res.end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }));
@@ -86,12 +88,20 @@ test("five native resources share lazy status and release servers on shutdown/re
     process.env.Z_AI_API_KEY = "local-fixture-key";
     const result = await search.execute("search-2", args, undefined, undefined, session.extensionRunner.createContext());
     assert.equal(result.content[0].text, "Local search result");
+    assert.deepEqual(result.structuredContent, {
+      server: "search", tool: "web_search_prime", text: "Local search result", truncated: false,
+    }, "native callers receive the bounded curated result, not private MCP details");
     assert.deepEqual(calls.map(({ auth, params }) => ({ auth, name: params.name, arguments: params.arguments })), [{
       auth: "Bearer local-fixture-key", name: "web_search_prime",
       arguments: { search_query: "native contract", content_size: "high" },
     }]);
     const connected = getActiveServers().find((server) => server.id === "search");
     assert.ok(connected.client && connected.transport);
+    await assert.rejects(() => search.execute("search-error", { query: "fixture-error" }, undefined, undefined, session.extensionRunner.createContext()), /Owned service failure/);
+    const failure = search.renderResult({ content: [{ type: "text", text: "Owned service failure" }] },
+      { expanded: false, isPartial: false }, { fg: (_color, text) => text }, { isError: true });
+    assert.match(failure.render(80).join("\n"), /failed/);
+    assert.equal(calls.length, 2, "a failed MCP result is not automatically replayed");
     await session.reload();
     assert.equal(terminations, 1, "reload terminates the connected MCP session");
     assert.ok(!connected.client && !connected.transport, "reload releases the old transport");

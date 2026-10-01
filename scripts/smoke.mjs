@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ModelRuntime, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { InMemoryModelsStore } from "@earendil-works/pi-ai";
 import { __test, default as zaiMcpExtension } from "../src/index.ts";
 import zaiMcpReader from "../extensions/zai-mcp-reader.ts";
 import zaiMcpSearch from "../extensions/zai-mcp-search.ts";
@@ -10,6 +12,9 @@ import zaiMcpVision from "../extensions/zai-mcp-vision.ts";
 import zaiMcpZread from "../extensions/zai-mcp-zread.ts";
 
 const savedEnv = { ...process.env };
+async function registryFor(agentDir) {
+  return new ModelRegistry(await ModelRuntime.create({ authPath: join(agentDir, "auth.json"), modelsPath: join(agentDir, "models.json"), modelsStore: new InMemoryModelsStore(), allowModelNetwork: false }));
+}
 
 function restoreEnv() {
   process.env = { ...savedEnv };
@@ -179,7 +184,7 @@ for (const kind of ["http", "stdio"]) {
     while (reachedPhase !== phase) await Promise.resolve();
     controller.abort();
     await assert.rejects(connecting, /cancelled while connecting/);
-    assert.equal(connectOptions.signal, controller.signal, `${kind} ${phase} receives Pi cancellation`);
+    assert.equal(connectOptions.signal.aborted, true, `${kind} ${phase} receives Pi cancellation`);
     assert.equal(closeCalls, 1, `${kind} ${phase} cancellation closes its transport`);
     assert.equal(server.client, undefined);
     assert.equal(server.transport, undefined);
@@ -223,14 +228,34 @@ for (const kind of ["http", "stdio"]) {
 }
 
 const missingKeyAgentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-missing-key-"));
+for (const phase of ["authentication", "initialize"]) {
+  let release, closeCalls = 0, connects = 0;
+  const wait = new Promise(resolve => { release = resolve; });
+  const transport = { terminateSession: async () => {}, close: async () => { closeCalls++; } };
+  const client = { connect: async () => { connects++; if (phase === "initialize") await wait; } };
+  const server = { id: "search", kind: "http" };
+  const pending = __test.connectWith(server, undefined, async () => {
+    if (phase === "authentication") await wait;
+    return { client, transport };
+  });
+  const rejected = assert.rejects(pending, /cancelled|shut down/);
+  if (phase === "initialize") while (!connects) await Promise.resolve();
+  await Promise.all([__test.closeServers([server]), __test.closeServers([server])]);
+  release();
+  await rejected;
+  assert.equal(closeCalls, 1, `${phase}: teardown closes each owned transport once`);
+  assert.equal(server.client, undefined, `${phase}: late setup cannot publish a stale client`);
+  await assert.rejects(() => __test.connectWith(server, undefined, () => ({ client, transport })), /shut down/);
+}
 try {
   restoreEnv();
   delete process.env.Z_AI_API_KEY;
   delete process.env.ZAI_API_KEY;
   delete process.env.ZAI_CODING_CN_API_KEY;
   process.env.PI_CODING_AGENT_DIR = missingKeyAgentDir;
+  const modelRegistry = await registryFor(missingKeyAgentDir);
   await assert.rejects(
-    () => loaded.tools[0].execute("call-1", { query: "current pi docs" }, undefined, undefined, {}),
+    () => loaded.tools[0].execute("call-1", { query: "current pi docs" }, undefined, undefined, { modelRegistry }),
     /Missing Z\.ai API key/,
   );
 } finally {
@@ -250,9 +275,10 @@ try {
     JSON.stringify({ zai: { type: "api_key", key: "$ZAI_FROM_AUTH", env: { ZAI_FROM_AUTH: "stored-key" } } }),
     "utf8",
   );
-  assert.equal(__test.getApiKey(), "stored-key");
+  const registry = await registryFor(agentDir);
+  assert.equal(await __test.getApiKey(registry), "stored-key");
   process.env.Z_AI_API_KEY = "env-key";
-  assert.equal(__test.getApiKey(), "env-key");
+  assert.equal(await __test.getApiKey(registry), "env-key");
 } finally {
   await rm(agentDir, { recursive: true, force: true });
 }
@@ -270,9 +296,10 @@ try {
     JSON.stringify({ "zai-coding-cn": { type: "api_key", key: "cn-stored-key" } }),
     "utf8",
   );
-  assert.equal(__test.getApiKey(), "cn-stored-key", "should read key stored under the zai-coding-cn provider");
+  const registry = await registryFor(codingCnAgentDir);
+  assert.equal(await __test.getApiKey(registry), "cn-stored-key", "should read key stored under the zai-coding-cn provider");
   process.env.ZAI_CODING_CN_API_KEY = "cn-env-key";
-  assert.equal(__test.getApiKey(), "cn-env-key", "ZAI_CODING_CN_API_KEY env should take precedence");
+  assert.equal(await __test.getApiKey(registry), "cn-env-key", "ZAI_CODING_CN_API_KEY env should take precedence");
 } finally {
   await rm(codingCnAgentDir, { recursive: true, force: true });
 }
@@ -301,7 +328,8 @@ try {
     JSON.stringify({ "evil-zai-host": { type: "api_key", key: "evil-key" }, "my-zai-proxy": { type: "api_key", key: "custom-zai-key" }, unrelated: { type: "api_key", key: "not-zai" } }),
     "utf8",
   );
-  assert.equal(__test.getApiKey(), "custom-zai-key", "should read key from a custom models.json provider pointing at a Z.AI endpoint");
+  const registry = await registryFor(customProviderAgentDir);
+  assert.equal(await __test.getApiKey(registry), "custom-zai-key", "should read key from a custom models.json provider pointing at a Z.AI endpoint");
 } finally {
   await rm(customProviderAgentDir, { recursive: true, force: true });
 }
@@ -324,10 +352,13 @@ try {
     }),
     "utf8",
   );
-  assert.equal(__test.hasApiKeySource(), true);
   await assert.rejects(() => access(marker));
-  assert.equal(__test.getApiKey(), "command-key");
-  assert.equal(__test.getApiKey(), "command-key");
+  const registry = await registryFor(commandAgentDir);
+  const hostRefreshRuns = await readFile(marker, "utf8");
+  assert.equal(__test.hasApiKeySource(registry), true);
+  assert.equal(await readFile(marker, "utf8"), hostRefreshRuns, "extension status must not execute auth commands beyond native host refresh");
+  assert.equal(await __test.getApiKey(registry), "command-key");
+  assert.equal(await __test.getApiKey(registry), "command-key");
   assert.equal(await readFile(marker, "utf8"), "x");
 } finally {
   await rm(commandAgentDir, { recursive: true, force: true });
