@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Upgrade the bundled vision server to `@z_ai/mcp-server@0.1.5`, adopting its upstream `glm-5.3-flash` model and 131,072-token output limit (previously `glm-4.6v` and 32,768). No old-model override or lower cap is imposed.
+- Disclose the higher potential output cost ceiling. Offline startup/tool and intercepted-child checks pass; live model availability, pricing and paid calls remain unverified.
 - Scope the vision subprocess environment to the selected Z.ai credential, safe platform variables and explicit vendor options, including the user's `ZAI_MCP_LOG_PATH` logging destination. Unrelated provider credentials and Node preload hooks no longer reach the child; placeholder keys cannot borrow another provider's token.
 - Save full truncated outputs in unique private directories (0700) with exclusive owner-only files (0600), including on shared-temp platforms with umask 022.
 - Verify both boundaries through native tool execution, a loopback MCP fixture and an offline real vision child. No paid service request is made.

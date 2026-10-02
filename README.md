@@ -23,7 +23,7 @@ Reviewed Z.AI docs on 2026-06-05:
 - Web Search MCP documents web search with query, domain filter, recency filter, content size, and location options. The current remote MCP tool is `web_search_prime`.
 - Web Reader MCP documents URL reading with timeout, cache, Markdown/text, image retention, GFM, image data URL, image summary, and link summary options. The current remote MCP tool is `webReader`.
 - Zread MCP documents `search_doc`, `read_file`, and `get_repo_structure` for public GitHub repository search, file reading, and structure inspection.
-- Vision MCP documents UI artifact generation, screenshot OCR, error screenshot diagnosis, technical diagram understanding, data visualization analysis, UI diff checking, image analysis, and video analysis. The current npm package (`@z_ai/mcp-server@0.1.4`) exposes the image/video actions as `analyze_image` and `analyze_video`.
+- Vision MCP documents UI artifact generation, screenshot OCR, error screenshot diagnosis, technical diagram understanding, data visualization analysis, UI diff checking, image analysis, and video analysis. The bundled npm package (`@z_ai/mcp-server@0.1.5`) exposes the image/video actions as `analyze_image` and `analyze_video`.
 
 The pi-facing API is intentionally smaller than the upstream MCP tool list. Upstream MCP names are implementation details; agents see four stable tools with clear arguments.
 
@@ -68,8 +68,12 @@ pi -e .
 | `Z_AI_MCP_SERVERS` | No | `all` | Optional env-var allowlist for direct/legacy loading. Prefer `pi config` for normal package installs; each server is now a separate extension resource. |
 | `Z_AI_MCP_TIMEOUT_MS` | No | `180000` | Per-connection/tool-call timeout in milliseconds; vision and repository-search actions can take longer than ordinary search/read calls. |
 | `Z_AI_MODE` | No | `ZAI` | Passed through to the vision MCP server; Z.AI docs list `ZAI` as the supported value. |
+| `Z_AI_VISION_MODEL` | No | `glm-5.3-flash` | Optional user override of the bundled vision server's model. |
+| `Z_AI_VISION_MODEL_MAX_TOKENS` | No | `131072` | Optional user override of the bundled vision server's maximum output tokens. |
 
 \* If env vars are unset, the extension asks the current Pi model registry to resolve the first available Z.ai provider API key. Pi owns its selected agent directory, stored credentials, templates, command resolution and caching. It checks `zai` (global), then `zai-coding-cn` (China), then configured catalog aliases whose `baseUrl` points at a Z.ai / Zhipu (BigModel) endpoint. Header-only model authentication does not replace this external service's required bearer API key. Run `/login` in pi and choose a ZAI provider to store this key.
+
+The bundled vision server's 0.1.5 update adopts upstream defaults: the model changes from `glm-4.6v` to `glm-5.3-flash`, and the output limit rises from 32,768 to 131,072 tokens. This package does not pin the old model or cap. The higher output ceiling can increase per-call cost; actual charges depend on service pricing and generated output. Offline startup, tool listing and intercepted-child checks pass, but live model availability and cost have not been verified.
 
 Example: disable vision server access for a lighter setup: run `pi config`, open package resources for `pi-zai-mcp`, and disable `extensions/zai-mcp-vision.ts`.
 
