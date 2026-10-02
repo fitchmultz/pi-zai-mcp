@@ -60,10 +60,17 @@ function enabledServerIds(): Set<ServerId> | undefined {
   return enabled;
 }
 
-function environment(): Record<string, string> {
+function visionEnvironment(): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === "string") env[key] = value;
+  // The SDK supplies safe platform variables; only forward vendor-owned settings.
+  for (const key of [
+    "Z_AI_MODE", "PLATFORM_MODE", "Z_AI_BASE_URL",
+    "Z_AI_VISION_MODEL", "Z_AI_VISION_MODEL_TEMPERATURE",
+    "Z_AI_VISION_MODEL_TOP_P", "Z_AI_VISION_MODEL_MAX_TOKENS",
+    "Z_AI_TIMEOUT", "Z_AI_RETRY_COUNT", "SERVER_NAME", "SERVER_VERSION", "ZAI_MCP_LOG_PATH",
+  ]) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
   }
   return env;
 }
@@ -110,7 +117,7 @@ const SERVER_FACTORIES = {
       command: visionCommand.command,
       args: visionCommand.args,
       env: {
-        ...environment(),
+        ...visionEnvironment(),
         Z_AI_MODE: process.env.Z_AI_MODE || "ZAI",
       },
     };

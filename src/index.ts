@@ -13,8 +13,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Type } from "typebox";
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -266,8 +265,6 @@ function summarizeMcpResult(result: unknown): string {
 
 async function truncateForTool(
   text: string,
-  serverId: string,
-  toolName: string,
 ): Promise<{ content: string; details: { truncated: boolean; file?: string } }> {
   const truncation = truncateHead(text, {
     maxLines: DEFAULT_MAX_LINES,
@@ -276,11 +273,10 @@ async function truncateForTool(
 
   if (!truncation.truncated) return { content: truncation.content, details: { truncated: false } };
 
-  const dir = join(tmpdir(), EXTENSION_NAME);
-  await mkdir(dir, { recursive: true });
-  const safeName = `${Date.now()}-${randomUUID()}-${serverId}-${toolName}`.replace(/[^a-zA-Z0-9_.-]/g, "_");
-  const file = join(dir, `${safeName}.txt`);
-  await writeFile(file, text, "utf8");
+  const dir = await mkdtemp(join(tmpdir(), `${EXTENSION_NAME}-`));
+  await chmod(dir, 0o700);
+  const file = join(dir, "output.txt");
+  await writeFile(file, text, { encoding: "utf8", mode: 0o600, flag: "wx" });
 
   const notice = `\n\n[Z.ai MCP output truncated: ${truncation.outputLines} of ${truncation.totalLines} lines (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). Full output saved to: ${file}]`;
   return { content: truncation.content + notice, details: { truncated: true, file } };
@@ -483,7 +479,7 @@ async function executeCuratedTool(
   const result = await runExclusive(server, signal, () => callMcpTool(server, toolName, cleanArgs(args), registry, signal, update));
   const text = summarizeMcpResult(result);
   if (isMcpErrorResult(result)) throw new Error(`Z.AI MCP ${server.id}/${toolName} failed:\n${text}`);
-  const truncated = await truncateForTool(text, server.id, toolName);
+  const truncated = await truncateForTool(text);
   return {
     content: [{ type: "text" as const, text: truncated.content }],
     structuredContent: {

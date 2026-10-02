@@ -8,7 +8,15 @@ Service credentials use the explicit Z.AI environment variables first, then the 
 
 Native `outputSchema`/`structuredContent` contain only the existing bounded server/tool/text outcome, truncation flag and optional saved-file reference, not raw upstream MCP data. Shutdown aborts owned setup and requests, closes once, rejects queued calls and prevents late setup from publishing a client. Failures render as failures, never success, and are not automatically replayed.
 
-## Evidence — 2026-10-01
+## Safety maintenance qualification — 2026-10-02
+
+The vision child now receives only the selected service credential, SDK-safe platform environment and explicit vendor options. Large saved outputs use unique private directories (0700) and exclusive files (0600).
+
+At base `d01a0e70ed9a36d3b222ffe917433a883daafa66`, the new native controls failed for the intended reasons: shared-temp output directory 0755, unrelated credentials/Node hooks inherited by the real vendor child, and successful placeholder-key use. With the repair, full `check:compat` passed on official Pi 1.0.0 and the immutable maintained fork `8776b5e3511b1f00548abc6bd42a6da2bbc9ca02-eae8bb8666780a16-node24.21.0-darwin-arm64` (four native tests, zero skips). Both use physical Node 24.21.0 and coherent selected-host companions. Normal `ci` passed with zero production audit vulnerabilities.
+
+The actual bundled vendor child analyzes a local fixture image with intercepted fetch and denied network; assertions observe its selected Bearer credential, absence of unrelated environment, configured model/token limit, actual selected log file and placeholder failure. Native loopback search verifies full saved bytes and Unix private modes under shared temp/umask 022. No live model/service request, paid call or Windows permission qualification was performed. Evidence: `/tmp/pi100-extension-cleanup/services-evidence/audits/mcp-safety/`.
+
+## Original modernization evidence — 2026-10-01
 
 - Base: `c7547ea244d5446525829c1878139af3bf494929`.
 - Official Pi source: `a13d35a742c6ef8462812a28fbe1d8c8b7431c32` (v1.0.0). SDK SHA256 `5482298b995db935f7b96f5d6056fa1c36ac6fc80456be594ef65b83c62b0d30`; bundled CLI SHA256 `e79626f2dd6f94aa45d30f3fa63cd84319a6eefcd150b353cfaf274366926774`.
@@ -21,7 +29,7 @@ Native `outputSchema`/`structuredContent` contain only the existing bounded serv
 
 Local logs: `/tmp/zai-mcp-pi100-{ci,check,vision,esm,source-probe,packed-probe}.log`. Source/packed identity proofs: `/tmp/pi100-native-services/zai-mcp-{source,packed}-proof/identity.json`. UI captures: `/tmp/pi100-native-services/zai-mcp-{fullscreen,regular}-{48,100,160,expanded}.txt`, with host identity observations alongside them. Owned UI processes are stopped after inspection.
 
-## Delivery boundaries
+## Original modernization delivery boundaries — 2026-10-01
 
 Recommended unused version: **0.2.0**, through the existing owned npm and GitHub release channels after parent review. No publication, tag or merge is part of this implementation. The older 0.87 cohort-only PR is not overwritten or cherry-picked.
 
