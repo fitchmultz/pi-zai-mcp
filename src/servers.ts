@@ -67,7 +67,7 @@ function visionEnvironment(): Record<string, string> {
     "Z_AI_MODE", "PLATFORM_MODE", "Z_AI_BASE_URL",
     "Z_AI_VISION_MODEL", "Z_AI_VISION_MODEL_TEMPERATURE",
     "Z_AI_VISION_MODEL_TOP_P", "Z_AI_VISION_MODEL_MAX_TOKENS",
-    "Z_AI_TIMEOUT", "Z_AI_RETRY_COUNT", "SERVER_NAME", "SERVER_VERSION",
+    "Z_AI_TIMEOUT", "Z_AI_RETRY_COUNT", "SERVER_NAME", "SERVER_VERSION", "ZAI_MCP_LOG_PATH",
   ]) {
     const value = process.env[key];
     if (value !== undefined) env[key] = value;

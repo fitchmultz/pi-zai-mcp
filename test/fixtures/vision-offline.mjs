@@ -19,6 +19,7 @@ globalThis.fetch = async (url, options) => {
     unrelatedEnvironment: ["ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "NODE_OPTIONS"].filter((key) => key in process.env),
     model: body.model,
     maxTokens: body.max_tokens,
+    logPath: process.env.ZAI_MCP_LOG_PATH ?? null,
   };
   return Response.json({ choices: [{ message: { content: JSON.stringify(receipt) } }] });
 };

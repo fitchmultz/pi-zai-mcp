@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-- Scope the vision subprocess environment to the selected Z.ai credential, safe platform variables and explicit vendor options. Unrelated provider credentials and Node preload hooks no longer reach the child; placeholder keys cannot borrow another provider's token.
+- Scope the vision subprocess environment to the selected Z.ai credential, safe platform variables and explicit vendor options, including the user's `ZAI_MCP_LOG_PATH` logging destination. Unrelated provider credentials and Node preload hooks no longer reach the child; placeholder keys cannot borrow another provider's token.
 - Save full truncated outputs in unique private directories (0700) with exclusive owner-only files (0600), including on shared-temp platforms with umask 022.
 - Verify both boundaries through native tool execution, a loopback MCP fixture and an offline real vision child. No paid service request is made.
 

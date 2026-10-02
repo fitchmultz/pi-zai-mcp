@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -14,9 +14,15 @@ test("five native resources share lazy status and release servers on shutdown/re
   const agentDir = join(root, "agent");
   await mkdir(agentDir);
   const oldEnv = { ...process.env };
+  const childHome = join(root, "child-home");
+  const logPath = join(root, "selected-private.log");
+  await mkdir(childHome);
+  await writeFile(logPath, "", { mode: 0o600 });
   process.env.PI_CODING_AGENT_DIR = agentDir;
   process.env.PI_OFFLINE = "1";
   Object.assign(process.env, {
+    HOME: childHome,
+    ZAI_MCP_LOG_PATH: logPath,
     ANTHROPIC_AUTH_TOKEN: "synthetic-unrelated-secret",
     OPENAI_API_KEY: "synthetic-other-secret",
     NODE_OPTIONS: "--no-warnings",
@@ -156,6 +162,9 @@ test("five native resources share lazy status and release servers on shutdown/re
       assert.deepEqual(receipt.unrelatedEnvironment, [], "unrelated credentials and Node hooks must not reach the child");
       assert.equal(receipt.model, "synthetic-configured-model");
       assert.equal(receipt.maxTokens, 42);
+      assert.equal(receipt.logPath, logPath, "the vendor must retain the selected private log destination");
+      assert.match(await readFile(logPath, "utf8"), /Report the intercepted offline request/);
+      await assert.rejects(() => access(join(childHome, ".zai")), { code: "ENOENT" }, "no default-home log directory is created");
     });
     await session.reload();
     assert.equal(terminations, 1, "reload terminates the connected MCP session");
