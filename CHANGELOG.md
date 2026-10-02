@@ -2,13 +2,14 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.2.1 - 2026-10-02
 
 - Upgrade the bundled vision server to `@z_ai/mcp-server@0.1.5`, adopting its upstream `glm-5.3-flash` model and 131,072-token output limit (previously `glm-4.6v` and 32,768). No old-model override or lower cap is imposed.
 - Disclose the higher potential output cost ceiling. Offline startup/tool and intercepted-child checks pass; live model availability, pricing and paid calls remain unverified.
 - Scope the vision subprocess environment to the selected Z.ai credential, safe platform variables and explicit vendor options, including the user's `ZAI_MCP_LOG_PATH` logging destination. Unrelated provider credentials and Node preload hooks no longer reach the child; placeholder keys cannot borrow another provider's token.
 - Save full truncated outputs in unique private directories (0700) with exclusive owner-only files (0600), including on shared-temp platforms with umask 022.
 - Verify both boundaries through native tool execution, a loopback MCP fixture and an offline real vision child. No paid service request is made.
+- Refresh the locked MCP SDK to 1.31.0 and Hono node-server to 2.1.3, retaining the Node>=22.19 floor and optional wildcard host peers.
 
 ## 0.2.0 - 2026-10-01
 
