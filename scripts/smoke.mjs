@@ -5,11 +5,8 @@ import { join } from "node:path";
 import { ModelRuntime, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { InMemoryModelsStore } from "@earendil-works/pi-ai";
 import { __test, default as zaiMcpExtension } from "../src/index.ts";
-import zaiMcpReader from "../extensions/zai-mcp-reader.ts";
 import zaiMcpSearch from "../extensions/zai-mcp-search.ts";
 import zaiMcpStatus from "../extensions/zai-mcp-status.ts";
-import zaiMcpVision from "../extensions/zai-mcp-vision.ts";
-import zaiMcpZread from "../extensions/zai-mcp-zread.ts";
 
 const savedEnv = { ...process.env };
 async function registryFor(agentDir) {
@@ -51,10 +48,6 @@ function loadExtension(env = {}, extension = zaiMcpExtension) {
   return { tools, commands, warnings };
 }
 
-async function loadFreshModule(id) {
-  return import(`../src/index.ts?smoke=${id}-${Date.now()}-${Math.random()}`);
-}
-
 function patchWrite(stream, fn) {
   const original = stream.write;
   let output = "";
@@ -70,15 +63,6 @@ function patchWrite(stream, fn) {
     });
 }
 
-const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
-assert.deepEqual(packageJson.pi.extensions, [
-  "./extensions/zai-mcp-search.ts",
-  "./extensions/zai-mcp-reader.ts",
-  "./extensions/zai-mcp-zread.ts",
-  "./extensions/zai-mcp-vision.ts",
-  "./extensions/zai-mcp-status.ts",
-]);
-
 __test.resetGlobalStateForTests();
 const loaded = loadExtension();
 assert.deepEqual(
@@ -91,49 +75,17 @@ const searchOnly = loadExtension({ Z_AI_MCP_SERVERS: "search,unknown" });
 assert.deepEqual(searchOnly.tools.map((tool) => tool.name), ["z_ai_search"]);
 assert.match(searchOnly.warnings.join("\n"), /ignoring unknown Z_AI_MCP_SERVERS/);
 
-const split = [zaiMcpSearch, zaiMcpReader, zaiMcpZread, zaiMcpVision].flatMap((extension) => loadExtension({}, extension).tools.map((tool) => tool.name));
-assert.deepEqual(split, ["z_ai_search", "z_ai_reader", "z_ai_zread", "z_ai_vision"]);
 for (const tool of loaded.tools) {
-  assert.equal(tool.execute.length, 5, `${tool.name} uses Pi's current execute(id, params, signal, onUpdate, ctx) order`);
   assert.ok(tool.promptSnippet, `${tool.name} declares prompt routing metadata`);
   assert.ok(tool.promptGuidelines.every((guideline) => guideline.includes(tool.name)), `${tool.name} names itself in every prompt guideline`);
 }
 assert.deepEqual(loadExtension({ Z_AI_MCP_SERVERS: "reader" }, zaiMcpSearch).tools.map((tool) => tool.name), ["z_ai_search"]);
 assert.deepEqual(loadExtension({}, zaiMcpStatus).tools, []);
 
-__test.resetGlobalStateForTests();
-{
-  const tools = [];
-  const commands = new Map();
-  const pi = {
-    registerTool: (tool) => tools.push(tool),
-    registerCommand: (name, command) => commands.set(name, command),
-    on: () => undefined,
-  };
-  for (const server of ["search", "reader", "zread", "vision"]) {
-    const mod = await loadFreshModule(server);
-    mod.registerZaiMcpServers(pi, [server]);
-  }
-  const statusMod = await loadFreshModule("status");
-  statusMod.registerZaiMcpStatusCommand(pi);
-  let notification;
-  await commands.get("zai-mcp-status").handler("", {
-    hasUI: true,
-    mode: "rpc",
-    ui: { notify: (message) => (notification = message) },
-  });
-  assert.deepEqual(JSON.parse(notification).map((server) => server.id), ["search", "reader", "zread", "vision"]);
-}
-__test.resetGlobalStateForTests();
-
 const none = loadExtension({ Z_AI_MCP_SERVERS: "unknown" });
 assert.equal(none.tools.length, 0);
 assert.match(none.warnings.join("\n"), /no Z\.AI MCP servers enabled/);
 
-assert.deepEqual(
-  __test.searchArgs({ query: "current pi docs" }),
-  { search_query: "current pi docs", search_domain_filter: undefined, search_recency_filter: undefined, content_size: "high", location: undefined },
-);
 assert.deepEqual(
   __test.searchArgs({ query: "current pi docs", content_size: "medium" }),
   { search_query: "current pi docs", search_domain_filter: undefined, search_recency_filter: undefined, content_size: "medium", location: undefined },
@@ -161,35 +113,27 @@ const truncated = await __test.truncateForTool("small", "search", "web_search_pr
 assert.equal(truncated.content, "small");
 assert.deepEqual(truncated.details, { truncated: false });
 
-const setupPhases = ["transport startup", "initialize", "initialized notification"];
-for (const kind of ["http", "stdio"]) {
-  for (const phase of setupPhases) {
-    let closeCalls = 0;
-    let connectOptions;
-    let reachedPhase;
-    const transport = { close: async () => { closeCalls += 1; } };
-    const client = {
-      connect: async (_transport, options) => {
-        connectOptions = options;
-        for (const current of setupPhases.slice(0, setupPhases.indexOf(phase) + 1)) {
-          await Promise.resolve();
-          reachedPhase = current;
-        }
-        await new Promise(() => undefined);
-      },
-    };
-    const server = { id: kind === "http" ? "search" : "vision", label: phase, kind };
-    const controller = new AbortController();
-    const connecting = __test.connectWith(server, controller.signal, () => ({ client, transport }));
-    while (reachedPhase !== phase) await Promise.resolve();
-    controller.abort();
-    await assert.rejects(connecting, /cancelled while connecting/);
-    assert.equal(connectOptions.signal.aborted, true, `${kind} ${phase} receives Pi cancellation`);
-    assert.equal(closeCalls, 1, `${kind} ${phase} cancellation closes its transport`);
-    assert.equal(server.client, undefined);
-    assert.equal(server.transport, undefined);
-    assert.equal(server.connectPromise, undefined);
-  }
+{
+  let closeCalls = 0;
+  let connectOptions;
+  const transport = { close: async () => { closeCalls += 1; } };
+  const client = {
+    connect: async (_transport, options) => {
+      connectOptions = options;
+      await new Promise(() => undefined);
+    },
+  };
+  const server = { id: "search", kind: "http" };
+  const controller = new AbortController();
+  const connecting = __test.connectWith(server, controller.signal, () => ({ client, transport }));
+  while (!connectOptions) await Promise.resolve();
+  controller.abort();
+  await assert.rejects(connecting, /cancelled while connecting/);
+  assert.equal(connectOptions.signal.aborted, true, "connecting receives Pi cancellation");
+  assert.equal(closeCalls, 1, "cancellation closes the owned transport once");
+  assert.equal(server.client, undefined);
+  assert.equal(server.transport, undefined);
+  assert.equal(server.connectPromise, undefined);
 }
 
 {

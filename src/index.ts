@@ -878,7 +878,7 @@ export function createZaiMcpExtension(pi: ExtensionAPI) {
   registerZaiMcpStatusCommand(pi);
 }
 
-export const __test = { activeServerStatus, closeServers, connectWith, createServers, getApiKey, hasApiKeySource, resetGlobalStateForTests, searchArgs, serverStatus, truncateForTool, visionArgs };
+export const __test = { closeServers, connectWith, getApiKey, hasApiKeySource, resetGlobalStateForTests, searchArgs, truncateForTool, visionArgs };
 
 export default function zaiMcpExtension(pi: ExtensionAPI) {
   createZaiMcpExtension(pi);
