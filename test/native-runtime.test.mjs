@@ -67,6 +67,15 @@ test("five native resources share lazy status and release servers on shutdown/re
   await loader.reload();
   assert.deepEqual(loader.getExtensions().errors, []);
   assert.equal(loader.getExtensions().extensions.length, 5);
+  for (const [resource, tool] of [
+    ["search", "z_ai_search"], ["reader", "z_ai_reader"],
+    ["zread", "z_ai_zread"], ["vision", "z_ai_vision"],
+  ]) {
+    const path = fileURLToPath(new URL(`../extensions/zai-mcp-${resource}.ts`, import.meta.url));
+    const extension = loader.getExtensions().extensions.find((extension) => extension.path === path);
+    assert.ok(extension, `native loader must load the ${resource} resource`);
+    assert.deepEqual([...extension.tools.keys()], [tool], `${resource} resource must own only its service tool`);
+  }
   const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null,
     modelsStorePath: join(agentDir, "models-store.json"), allowModelNetwork: false });
   const { session } = await createAgentSession({ cwd: root, agentDir, modelRuntime, resourceLoader: loader,
