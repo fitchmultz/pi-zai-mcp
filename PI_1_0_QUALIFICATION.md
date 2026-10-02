@@ -8,6 +8,12 @@ Service credentials use the explicit Z.AI environment variables first, then the 
 
 Native `outputSchema`/`structuredContent` contain only the existing bounded server/tool/text outcome, truncation flag and optional saved-file reference, not raw upstream MCP data. Shutdown aborts owned setup and requests, closes once, rejects queued calls and prevents late setup from publishing a client. Failures render as failures, never success, and are not automatically replayed.
 
+## Vision dependency defaults — 2026-10-02
+
+Merged dependency update #11 (`35040ae9894727ace0606f1e38aa02e7cd0705f8`) installs `@z_ai/mcp-server@0.1.5`. The owner selected its upstream defaults: `glm-5.3-flash` and 131,072 maximum output tokens, replacing `glm-4.6v` and 32,768. The extension imposes no model override or lower cap; explicit user vendor settings remain supported.
+
+Actual vendor source/configuration and offline stdio initialization/tool listing were inspected. Full official Pi 1.0.0 and immutable fork877 compatibility checks pass on the current dependency tree, including intercepted real-child credential/logging and native private-output controls. No live availability, pricing or paid-call proof is claimed; the larger output ceiling can increase per-call cost. Evidence: `/tmp/pi100-extension-cleanup/services-evidence/current-reconciliation/current-union-pi-zai-mcp-14/` and `services-evidence/vendor/`.
+
 ## Safety maintenance qualification — 2026-10-02
 
 The vision child now receives only the selected service credential, SDK-safe platform environment and explicit vendor options. Large saved outputs use unique private directories (0700) and exclusive files (0600).
