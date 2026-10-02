@@ -109,7 +109,7 @@ assert.deepEqual(
   { video_source: "demo.mp4", prompt: "summarize" },
 );
 
-const truncated = await __test.truncateForTool("small", "search", "web_search_prime");
+const truncated = await __test.truncateForTool("small");
 assert.equal(truncated.content, "small");
 assert.deepEqual(truncated.details, { truncated: false });
 

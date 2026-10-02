@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { InMemoryCredentialStore, validateToolArguments } from "@earendil-works/pi-ai";
@@ -16,9 +16,17 @@ test("five native resources share lazy status and release servers on shutdown/re
   const oldEnv = { ...process.env };
   process.env.PI_CODING_AGENT_DIR = agentDir;
   process.env.PI_OFFLINE = "1";
+  Object.assign(process.env, {
+    ANTHROPIC_AUTH_TOKEN: "synthetic-unrelated-secret",
+    OPENAI_API_KEY: "synthetic-other-secret",
+    NODE_OPTIONS: "--no-warnings",
+    Z_AI_VISION_MODEL: "synthetic-configured-model",
+    Z_AI_VISION_MODEL_MAX_TOKENS: "42",
+  });
   for (const key of ["Z_AI_API_KEY", "ZAI_API_KEY", "ZAI_CODING_CN_API_KEY"]) delete process.env[key];
   const fetch = globalThis.fetch;
   const calls = [];
+  const fullOutput = "private search result\n".repeat(3_000);
   let terminations = 0;
   const server = createServer(async (req, res) => {
     if (req.method === "DELETE") {
@@ -41,7 +49,7 @@ test("five native resources share lazy status and release servers on shutdown/re
       ? { protocolVersion: message.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "fixture", version: "1" } }
       : message.params.arguments.search_query === "fixture-error"
         ? { isError: true, content: [{ type: "text", text: "Owned service failure" }] }
-        : { content: [{ type: "text", text: "Local search result" }] };
+        : { content: [{ type: "text", text: message.params.arguments.search_query === "large-output" ? fullOutput : "Local search result" }] };
     if (message.method === "tools/call") calls.push({ auth: req.headers.authorization, params: message.params });
     res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "fixture-session" });
     res.end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }));
@@ -111,10 +119,55 @@ test("five native resources share lazy status and release servers on shutdown/re
       { expanded: false, isPartial: false }, { fg: (_color, text) => text }, { isError: true });
     assert.match(failure.render(80).join("\n"), /failed/);
     assert.equal(calls.length, 2, "a failed MCP result is not automatically replayed");
+    await t.test("native large output is private even under shared temp and umask 022",
+      { skip: process.platform === "win32" }, async () => {
+        const sharedTemp = await mkdtemp("/tmp/zai-mcp-shared-");
+        await chmod(sharedTemp, 0o777);
+        const previousTemp = process.env.TMPDIR;
+        const previousUmask = process.umask(0o022);
+        process.env.TMPDIR = sharedTemp;
+        try {
+          const large = await search.execute("search-large", { query: "large-output" }, undefined, undefined, session.extensionRunner.createContext());
+          const file = large.structuredContent.file;
+          assert.equal(large.structuredContent.truncated, true);
+          assert.equal(await readFile(file, "utf8"), fullOutput, "full wire output remains retrievable");
+          assert.match(large.content[0].text, /Full output saved to:/);
+          assert.equal((await stat(sharedTemp)).mode & 0o777, 0o777);
+          assert.equal((await stat(dirname(file))).mode & 0o777, 0o700, "saved output directory must be private");
+          assert.equal((await stat(file)).mode & 0o777, 0o600, "saved output file must be private");
+        } finally {
+          process.umask(previousUmask);
+          if (previousTemp === undefined) delete process.env.TMPDIR;
+          else process.env.TMPDIR = previousTemp;
+          await rm(sharedTemp, { recursive: true, force: true });
+        }
+      });
+    const image = join(root, "image.png");
+    await writeFile(image, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aONsAAAAASUVORK5CYII=", "base64"));
+    const preload = fileURLToPath(new URL("./fixtures/vision-offline.mjs", import.meta.url));
+    await t.test("real vision child uses only the selected service credential and preserves vendor options", async () => {
+      process.env.Z_AI_API_KEY = "synthetic-zai-credential";
+      getActiveServers().find((server) => server.id === "vision").args.unshift("--import", preload);
+      const vision = session.extensionRunner.getToolDefinition("z_ai_vision");
+      const result = await vision.execute("vision-valid", { action: "analyze_image", image_source: image, prompt: "Report the intercepted offline request" },
+        undefined, undefined, session.extensionRunner.createContext());
+      const receipt = JSON.parse(result.content[0].text);
+      assert.equal(receipt.authorization, "Bearer synthetic-zai-credential");
+      assert.deepEqual(receipt.unrelatedEnvironment, [], "unrelated credentials and Node hooks must not reach the child");
+      assert.equal(receipt.model, "synthetic-configured-model");
+      assert.equal(receipt.maxTokens, 42);
+    });
     await session.reload();
     assert.equal(terminations, 1, "reload terminates the connected MCP session");
     assert.ok(!connected.client && !connected.transport, "reload releases the old transport");
     assert.equal(getActiveServers().length, 4, "reload must release old registrations, not duplicate them");
+    await t.test("placeholder vision credential cannot fall back to another provider", async () => {
+      process.env.Z_AI_API_KEY = "your_api_key";
+      getActiveServers().find((server) => server.id === "vision").args.unshift("--import", preload);
+      const vision = session.extensionRunner.getToolDefinition("z_ai_vision");
+      await assert.rejects(() => vision.execute("vision-placeholder", { action: "analyze_image", image_source: image, prompt: "Must not use another provider credential" },
+        undefined, undefined, session.extensionRunner.createContext()), /Connection closed|Z_AI_API_KEY/);
+    });
     assert.deepEqual(errors, []);
   } finally {
     await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });

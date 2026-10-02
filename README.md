@@ -157,7 +157,7 @@ Typical flow:
 2. If a tool call fails, run `/zai-mcp-status` in interactive pi to inspect enabled server connection status. Keep `extensions/zai-mcp-status.ts` enabled if you want this command. `connectionStatus: "lazy_not_connected_until_first_use"` is normal before the first call to that server; the pi tool is still registered and available.
 3. If Z.AI changes upstream MCP tool names or schemas, update this extension deliberately and run the validation commands below.
 
-Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When truncation happens, the full output is saved to a temp file and the path is included in the tool result.
+Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When truncation happens, the full output is saved to an owner-only temp directory (0700) and file (0600), and the path is included in the tool result. Saved results remain available until you or your OS removes them.
 
 ## How it works
 
@@ -179,12 +179,12 @@ Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When t
 - Pi extensions run with your local user permissions. Review code before installing any third-party pi package.
 - The extension reads the explicit service aliases `Z_AI_API_KEY`, `ZAI_API_KEY`, or `ZAI_CODING_CN_API_KEY`, or asks the current Pi registry for a Z.ai provider API key; it neither parses credential files nor executes auth commands itself. It stores no credentials.
 - HTTP MCP calls send the key as a Bearer token to Z.ai MCP endpoints.
-- Vision calls start a local stdio MCP server and pass the key in that child process environment.
+- Vision calls start a local stdio MCP server and pass only the selected Z.ai key, the SDK's safe platform environment, and vendor settings (`Z_AI_MODE`, `PLATFORM_MODE`, `Z_AI_BASE_URL`, `Z_AI_VISION_MODEL`, `Z_AI_VISION_MODEL_TEMPERATURE`, `Z_AI_VISION_MODEL_TOP_P`, `Z_AI_VISION_MODEL_MAX_TOKENS`, `Z_AI_TIMEOUT`, `Z_AI_RETRY_COUNT`, `SERVER_NAME`, `SERVER_VERSION`). Other provider credentials and `NODE_OPTIONS` are not forwarded. Placeholder vision keys fail rather than falling back to another provider's token.
 - Truncated full outputs are written under your OS temp directory, not this repo.
 
 ## Verify this repo
 
-The development baseline is official Pi **1.0.0**. Qualification results and remaining fork/live checks are recorded in [Pi 1.0 qualification](PI_1_0_QUALIFICATION.md). `npm ci --ignore-scripts` then `npm run check:compat` runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, a loopback MCP search call, connected-session termination on reload, shutdown cleanup, and dry-run packing. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai or starts the vision service; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
+The development baseline is official Pi **1.0.0**. Qualification results and remaining fork/live checks are recorded in [Pi 1.0 qualification](PI_1_0_QUALIFICATION.md). `npm ci --ignore-scripts` then `npm run check:compat` runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, loopback MCP search and private large-output checks, connected-session termination on reload, shutdown cleanup, and dry-run packing. It also starts the real bundled vision child with intercepted fetch and denied network to verify credential scoping and placeholder rejection. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
 
 ```bash
 npm install

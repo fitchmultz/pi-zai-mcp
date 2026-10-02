@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+- Scope the vision subprocess environment to the selected Z.ai credential, safe platform variables and explicit vendor options. Unrelated provider credentials and Node preload hooks no longer reach the child; placeholder keys cannot borrow another provider's token.
+- Save full truncated outputs in unique private directories (0700) with exclusive owner-only files (0600), including on shared-temp platforms with umask 022.
+- Verify both boundaries through native tool execution, a loopback MCP fixture and an offline real vision child. No paid service request is made.
+
 ## 0.2.0 - 2026-10-01
 
 - Modernize the development cohort and suggested support floor to Pi 1.0.0, retaining optional wildcard host peers and all four curated paid MCP workflows.
