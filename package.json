@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@z_ai/mcp-server": "0.1.4"
+    "@z_ai/mcp-server": "0.1.5"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "1.0.0",
