@@ -41,7 +41,7 @@ Install from GitHub:
 pi install https://github.com/fitchmultz/pi-zai-mcp
 ```
 
-Compatibility: Pi **1.0.0** is the supported development baseline and suggested minimum. Host runtime packages remain optional wildcard peers rather than hard peer/engines pins. Official Pi and the maintained fork require separate qualification; a future fork candidate is not certified by the official checks.
+Compatibility: Pi **1.0.0** remains the suggested support floor. Host runtime packages remain optional wildcard peers rather than hard peer/engines pins. Required qualification targets are the latest stable official Pi and latest maintained fork `main`, resolving version/commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not validation targets.
 
 Try it without installing permanently:
 
@@ -186,9 +186,15 @@ Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When t
 - Vision calls start a local stdio MCP server and pass only the selected Z.ai key, the SDK's safe platform environment, and vendor settings (`Z_AI_MODE`, `PLATFORM_MODE`, `Z_AI_BASE_URL`, `Z_AI_VISION_MODEL`, `Z_AI_VISION_MODEL_TEMPERATURE`, `Z_AI_VISION_MODEL_TOP_P`, `Z_AI_VISION_MODEL_MAX_TOKENS`, `Z_AI_TIMEOUT`, `Z_AI_RETRY_COUNT`, `SERVER_NAME`, `SERVER_VERSION`, `ZAI_MCP_LOG_PATH`). Other provider credentials and `NODE_OPTIONS` are not forwarded. Placeholder vision keys fail rather than falling back to another provider's token. The vendor records prompts/image paths in logs; set `ZAI_MCP_LOG_PATH` to your chosen private or non-persisting destination to avoid its default `~/.zai` log files.
 - Truncated full outputs are written under your OS temp directory, not this repo.
 
+## Automatic npm releases (maintainers)
+
+Follow the [shared release procedure](https://github.com/fitchmultz/.github#automatic-npm-releases): merge a reviewed PR into `main` with an intentional `package.json` version bump and a matching versioned `CHANGELOG.md` section. Once configured and enabled, publication is unattended after the existing compatibility checks and candidate-tarball qualification pass. Enable publishing only after confirming this package is already published on the owner's npm account, as required by [AGENTS.md](AGENTS.md). Complete any applicable package-specific release evidence before merging the bump, including the separate audit in `npm run ci`. Automation never bumps versions, overwrites releases, or republishes an existing version; existing manual publisher instructions remain valid.
+
+Failed/unpublished candidates can retry daily at 12:17 UTC or via manual dispatch of `npm release` on `main`, without another bump. Set repository variable `NPM_RELEASE_ENABLED` to anything other than `true` to stop new release plans; cancel pending runs separately when needed. Workflow validation is not evidence of a completed real OIDC publication.
+
 ## Verify this repo
 
-The development baseline is official Pi **1.0.0**. Qualification results and remaining fork/live checks are recorded in [Pi 1.0 qualification](PI_1_0_QUALIFICATION.md). `npm ci --ignore-scripts` then `npm run check:compat` runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, loopback MCP search and private large-output checks, connected-session termination on reload, shutdown cleanup, and dry-run packing. It also starts the real bundled vision child with intercepted fetch and denied network to verify credential scoping and placeholder rejection. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
+Historical qualification results and remaining live checks are recorded in [Pi 1.0 qualification](PI_1_0_QUALIFICATION.md); they do not certify a new host. For current qualification, use the shared qualifier with `--host official --target latest` and separately with the packed latest fork revision, selecting each consistent host graph before `npm run check:compat`. Plain `npm ci --ignore-scripts` installs only the locked development snapshot. The contract runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, loopback MCP search and private large-output checks, connected-session termination on reload, shutdown cleanup, and dry-run packing. It also starts the real bundled vision child with intercepted fetch and denied network to verify credential scoping and placeholder rejection. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
 
 ```bash
 npm install
