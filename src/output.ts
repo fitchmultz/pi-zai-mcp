@@ -1,4 +1,9 @@
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from "@earendil-works/pi-coding-agent";
+import {
+  DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES,
+  formatSize,
+  truncateHead,
+} from "@earendil-works/pi-coding-agent";
 import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,11 +11,15 @@ import { isRecord, stringValue } from "./tools.ts";
 
 function unwrapJsonString(text: string): string {
   const trimmed = text.trim();
-  if (!trimmed.startsWith('"')) { return text; }
+  if (!trimmed.startsWith('"')) {
+    return text;
+  }
   try {
     const parsed: unknown = JSON.parse(trimmed);
     return typeof parsed === "string" ? unwrapJsonString(parsed) : text;
-  } catch { return text; }
+  } catch {
+    return text;
+  }
 }
 
 function summarizeResource(resource: Readonly<Record<string, unknown>>): string {
@@ -19,10 +28,14 @@ function summarizeResource(resource: Readonly<Record<string, unknown>>): string 
 }
 
 function summarizeContentItem(value: unknown): string {
-  if (!isRecord(value)) { return stringValue(value); }
+  if (!isRecord(value)) {
+    return stringValue(value);
+  }
   switch (value.type) {
     case "text":
-      if (typeof value.text === "string") { return unwrapJsonString(value.text); }
+      if (typeof value.text === "string") {
+        return unwrapJsonString(value.text);
+      }
       break;
     case "image":
       if (typeof value.mimeType === "string") {
@@ -30,7 +43,9 @@ function summarizeContentItem(value: unknown): string {
       }
       break;
     case "resource":
-      if (isRecord(value.resource)) { return summarizeResource(value.resource); }
+      if (isRecord(value.resource)) {
+        return summarizeResource(value.resource);
+      }
       break;
     case "resource_link":
       return `[Resource link: ${stringValue(value.name ?? value.uri, "unknown")}] ${stringValue(value.uri)}`;
@@ -41,11 +56,17 @@ function summarizeContentItem(value: unknown): string {
 }
 
 export function summarizeMcpResult(result: unknown): string {
-  if (!isRecord(result)) { return stringValue(result); }
+  if (!isRecord(result)) {
+    return stringValue(result);
+  }
   const parts: string[] = [];
-  if (result.isError === true) { parts.push("[MCP tool reported an error]"); }
+  if (result.isError === true) {
+    parts.push("[MCP tool reported an error]");
+  }
   if (Array.isArray(result.content)) {
-    for (const item of result.content) { parts.push(summarizeContentItem(item)); }
+    for (const item of result.content) {
+      parts.push(summarizeContentItem(item));
+    }
   }
   if (result.structuredContent !== undefined) {
     parts.push(`Structured content:\n${JSON.stringify(result.structuredContent, null, 2)}`);
@@ -53,9 +74,16 @@ export function summarizeMcpResult(result: unknown): string {
   return parts.length > 0 ? parts.join("\n\n") : JSON.stringify(result, null, 2);
 }
 
-export async function truncateForTool(text: string): Promise<{ content: string; details: { truncated: boolean; file?: string } }> {
-  const truncation = truncateHead(text, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
-  if (!truncation.truncated) { return { content: truncation.content, details: { truncated: false } }; }
+export async function truncateForTool(
+  text: string,
+): Promise<{ content: string; details: { truncated: boolean; file?: string } }> {
+  const truncation = truncateHead(text, {
+    maxLines: DEFAULT_MAX_LINES,
+    maxBytes: DEFAULT_MAX_BYTES,
+  });
+  if (!truncation.truncated) {
+    return { content: truncation.content, details: { truncated: false } };
+  }
   const dir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-"));
   await chmod(dir, 0o700);
   const file = join(dir, "output.txt");

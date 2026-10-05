@@ -10,11 +10,11 @@ on:
       official-version:
         description: Official stable version resolved for this run; blank resolves latest
         type: string
-        default: ''
+        default: ""
       fork-ref:
         description: Maintained fork commit resolved for this run; blank resolves main
         type: string
-        default: ''
+        default: ""
 
 permissions:
   contents: read

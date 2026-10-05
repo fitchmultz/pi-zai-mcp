@@ -95,17 +95,17 @@ Keep all four package resources enabled for full capability; they connect lazily
 
 ## Configure
 
-| Variable | Required | Default | Purpose |
-| --- | --- | --- | --- |
-| `Z_AI_API_KEY` / `ZAI_API_KEY` / `ZAI_CODING_CN_API_KEY` | Yes* | none | Z.ai API key used for HTTP MCP Bearer auth and the vision stdio server. Env vars take precedence over pi's stored provider key. |
-| `Z_AI_MCP_SERVERS` | No | `all` | Optional env-var allowlist for direct/legacy loading. Prefer `pi config` for normal package installs; each server is now a separate extension resource. |
-| `Z_AI_MCP_TIMEOUT_MS` | No | `300000` | Per-connection/tool-call timeout in milliseconds, aligned with the bundled vision HTTP deadline. Explicit overrides remain supported. |
-| `Z_AI_MODE` | No | `ZAI` | Passed through to the vision MCP server; Z.AI docs list `ZAI` as the supported value. |
-| `Z_AI_VISION_MODEL` | No | `glm-5.3-flash` | Optional user override of the bundled vision server's model. |
-| `Z_AI_VISION_MODEL_MAX_TOKENS` | No | `131072` | Optional user override of the bundled vision server's maximum output tokens. |
-| `Z_AI_VISION_MODEL_TEMPERATURE` | No | `1` for Flash/FlashX | Vision sampling override; other models retain vendor defaults. |
-| `Z_AI_VISION_MODEL_TOP_P` | No | `0.95` for Flash/FlashX | Vision nucleus-sampling override; other models retain vendor defaults. |
-| `Z_AI_BASE_URL` | No | vendor global standard API | Vision-only vendor setting, honored only when platform mode does not select a built-in endpoint; recognized `ZAI`/Zhipu modes replace it. Does not configure Pi's agent model or HTTP MCP endpoints. |
+| Variable                                                 | Required | Default                    | Purpose                                                                                                                                                                                              |
+| -------------------------------------------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Z_AI_API_KEY` / `ZAI_API_KEY` / `ZAI_CODING_CN_API_KEY` | Yes*     | none                       | Z.ai API key used for HTTP MCP Bearer auth and the vision stdio server. Env vars take precedence over pi's stored provider key.                                                                      |
+| `Z_AI_MCP_SERVERS`                                       | No       | `all`                      | Optional env-var allowlist for direct/legacy loading. Prefer `pi config` for normal package installs; each server is now a separate extension resource.                                              |
+| `Z_AI_MCP_TIMEOUT_MS`                                    | No       | `300000`                   | Per-connection/tool-call timeout in milliseconds, aligned with the bundled vision HTTP deadline. Explicit overrides remain supported.                                                                |
+| `Z_AI_MODE`                                              | No       | `ZAI`                      | Passed through to the vision MCP server; Z.AI docs list `ZAI` as the supported value.                                                                                                                |
+| `Z_AI_VISION_MODEL`                                      | No       | `glm-5.3-flash`            | Optional user override of the bundled vision server's model.                                                                                                                                         |
+| `Z_AI_VISION_MODEL_MAX_TOKENS`                           | No       | `131072`                   | Optional user override of the bundled vision server's maximum output tokens.                                                                                                                         |
+| `Z_AI_VISION_MODEL_TEMPERATURE`                          | No       | `1` for Flash/FlashX       | Vision sampling override; other models retain vendor defaults.                                                                                                                                       |
+| `Z_AI_VISION_MODEL_TOP_P`                                | No       | `0.95` for Flash/FlashX    | Vision nucleus-sampling override; other models retain vendor defaults.                                                                                                                               |
+| `Z_AI_BASE_URL`                                          | No       | vendor global standard API | Vision-only vendor setting, honored only when platform mode does not select a built-in endpoint; recognized `ZAI`/Zhipu modes replace it. Does not configure Pi's agent model or HTTP MCP endpoints. |
 
 \* If env vars are unset, the extension asks the current Pi model registry to resolve the first available Z.ai provider API key. Pi owns its selected agent directory, stored credentials, templates, command resolution and caching. It checks `zai` (global), then `zai-coding-cn` (China), then configured catalog aliases whose `baseUrl` points at a Z.ai / Zhipu (BigModel) endpoint. Header-only model authentication does not replace this external service's required bearer API key. Run `/login` in pi and choose a ZAI provider to store this key.
 
@@ -250,17 +250,39 @@ pi install -l /path/to/pi-zai-mcp
 
 ## Code quality
 
-`oxlint.config.ts` uses type-aware linting and TypeScript diagnostics, with correctness, suspicious and performance categories blocking. It bans unsafe TypeScript, floating/misused promises, dishonest assertions, unfinished-work comments and inline lint suppressions. CI runs the same zero-warning policy; `lint` is no longer an alias for typechecking.
+`oxlint.config.ts` enforces type-aware code quality and compiler diagnostics across maintained source, extensions, scripts and tests, with correctness, suspicious and performance categories blocking. `tsconfig.json` independently enables `strict`, `noImplicitReturns`, `noUncheckedIndexedAccess` and real `checkJs` for all maintained `scripts/**/*.mjs` and `test/**/*.mjs`, alongside TypeScript source/configuration. JavaScript receives sound JSDoc contracts and contextual inference rather than unchecked casts. No maintained JS is excluded from type-aware coverage.
 
-Production ceilings are complexity 10, depth 3, four parameters, 40 statements/function, 80 lines/function and 500 lines/file (excluding blank lines/comments). Existing fixture owners are bounded separately at 15/4/4/70/150/600; the native Pi execute adapter allows its SDK-required five parameters. No generated or declaration sources currently need exceptions.
+Production ceilings are complexity 10, depth 3, four parameters, 40 statements/function, 80 lines/function and 500 lines/file (excluding blank lines/comments). Tests, smoke and the offline fixture use 15/4/6/80/160/1000. Hand-maintained declarations retain applicable type/API checks with structural metrics disabled. Only dedicated `*.test-d.ts` tests allow described `@ts-expect-error` (minimum ten characters); compiler suppressions remain forbidden elsewhere. There are currently no generated source artifacts or byte-sensitive external fixture files to exclude.
 
-`strict-void-return`, props-aware parameter mutation protection and readonly input checks remain blocking. Native/SDK/platform readonly allowances identify their declarations, not names alone. `no-await-in-loop` is global, with documented exceptions only for ordered authentication and shared environment/session vision scenarios. `require-await`, underscore naming and consistent-function-scoping are intentionally disabled; nullable-object conditions and shorthand void arrows are allowed.
+Readonly parameters retain explicit exported contracts, but `ignoreInferredTypes: true` deliberately allows natural contextual callbacks and is not a deep-immutability guarantee. Native allowances identify declarations in TypeScript libraries, Node (`@types/node`), Undici (`undici-types`) and Pi, not names alone. They cover request/response/options, URL, abort, stream and HTTP/test handles; Pi's `AgentSession`/`ModelRegistry` remain SDK contracts. The concrete local `src/servers.ts` `ManagedServer` allowance represents mutable lifecycle ownership, not arbitrary application data. Generic `Map`, `ReadonlyMap`, `Record` and `Readonly` are never exempted. Oxlint 1.87.0 / oxlint-tsgolint 7.0.2003 falsely flags a primitive `ReadonlyMap<string, string>` parameter; `Readonly<ReadonlyMap<string, string>>` is the narrowly documented workaround. **Known checker ceiling:** wrapping mutable maps or mutable nested values in `Readonly` can also escape detection; the workaround is only justified for genuinely readonly primitive maps, not mutable inputs.
 
-Vitest assertion rules are configured with the actual assertion helpers, but Oxlint 1.87 does not recognize `node:test` blocks for `expect-expect`; `no-conditional-expect` recognizes imported Vitest `expect`, not this repo's Node `assert.*`. They are not claimed as native assertion guards. The runner remains `node:test`. Pedantic/style/restriction categories are not enabled wholesale.
+Semantic exceptions in the config are:
+
+| Boundary                       | Rule / allowance                                                | Reason and verification                                                                                                                                                        |
+| ------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/auth.ts`                  | `no-await-in-loop` module override                              | Native authentication can execute commands/refresh; the first key wins without resolving later providers. Smoke covers provider precedence and command caching.                |
+| `test/native-runtime.test.mjs` | `no-await-in-loop` module override                              | Ordered vision scenarios share environment and reload/child disposal. The native runtime test executes each scenario.                                                          |
+| `src/index.ts`                 | Props mutation only for `owner`, with qualified `ManagedServer` | Lifecycle state owns cancellation, queues and teardown; smoke races plus native reload/shutdown verify it.                                                                     |
+| `scripts/smoke.mjs`            | Props mutation only for `stream`, with Node `WriteStream`       | stdout/stderr capture temporarily owns `write` and restores it in `finally`. Its readonly override retains the complete shared allowance list. Smoke checks print/JSON output. |
+| `src/register-tool.ts`         | Five parameters                                                 | Native Pi tool execute ABI; native-runtime executes it with five arguments.                                                                                                    |
+| Smoke and native-runtime tests | `no-useless-undefined: {checkArguments: false}`                 | Native optional positions and negative-test inputs require explicit absence. Arrow-body checking stays enabled.                                                                |
+| Tests and fixtures             | `no-unnecessary-condition: {checkTypePredicates: false}`        | Preserve real Node runtime equality assertions without predicate-free aliases. Ordinary unnecessary conditions remain checked.                                                 |
+
+Floating-promise safety has empty safe-call/safe-promise lists: native promises, `test()` and subtests must still be awaited/returned/handled. `strict-void-return`, props-aware mutation and unsafe-type protection remain blocking. `require-await`, `consistent-return`, underscore naming, function-scoping preferences, and local array-sort/reverse bans are intentionally disabled. TypeScript owns return-path analysis. Nullable-object presence checks, genuine void shorthand callbacks, error rethrow identity and terminal discarded promise results are permitted deliberately.
+
+Only documented single-site sequencing and proven fail-closed conditional assertions may suppress their exact lint rule with a specific adjacent explanation. Blanket disables, inline downgrades, unsafe-type/floating-promise suppressions and production compiler suppressions are rejected by the comment-aware policy checker. Preference-only bans on comments, TODOs or `continue` are not part of the baseline.
+
+Vitest assertion rules register real helpers, but Oxlint 1.87 does not recognize `node:test` blocks for `expect-expect`; `no-conditional-expect` recognizes Vitest `expect`, not Node `assert.*`. These are not claimed as native assertion guards. The runner remains `node:test`.
+
+Oxfmt 0.72.0 owns supported maintained files using `.oxfmtrc.json`: 100 columns, two spaces, semicolons, double quotes, trailing commas, LF and final newlines. Import/package/Tailwind sorting and JSDoc rewriting are explicitly disabled. `.oxfmtignore` preserves npm's lockfile serialization; format commands load it together with `.gitignore`. VS Code recommends the official `oxc.oxc-vscode` extension and uses the repository config for code, Markdown, YAML and JSONC on save; plain JSON remains a CLI formatting responsibility so editors do not rewrite the npm-owned lockfile. Other editors can use the project's `oxfmt --lsp` ([editor setup](https://oxc.rs/docs/guide/usage/formatter/editors)).
 
 ```bash
-npm run lint:fix    # Apply safe fixes; repair remaining findings
-npm run lint:agent  # Blocking checks with agent-oriented diagnostics
+npm run format       # Format supported maintained files; preserve the npm lockfile
+npm run lint:fix     # Apply safe fixes; repair remaining findings
+npm run format       # Formatting and lint fixes must converge
+npm run format:check
+npm run lint:agent   # Blocking checks with agent-oriented diagnostics
+npm run typecheck   # Independent strict checked-JS/TS gate
 ```
 
 ## Current limits
@@ -274,7 +296,8 @@ npm run lint:agent  # Blocking checks with agent-oriented diagnostics
 ```text
 extensions/zai-mcp-*.ts  # per-server pi package entrypoints plus status command
 extensions/zai-mcp.ts    # legacy all-in-one entrypoint for direct local loading
-src/index.ts             # shared MCP schemas, connections and execution
+src/index.ts             # shared MCP connections, lifecycle and execution
+src/curated-tools.ts     # curated runtime schemas, metadata and call rendering
 src/auth.ts              # native service-key precedence and ordered provider resolution
 src/register-tool.ts     # typed native Pi tool adapter
 src/tools.ts             # argument projection and bounded result rendering

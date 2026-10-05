@@ -1,0 +1,2 @@
+# npm owns lockfile serialization.
+package-lock.json

@@ -16,11 +16,15 @@
 
 `test/native-runtime.test.mjs` owns packaged split-resource loading, tool execution, shared status, and reload/shutdown. Keep smoke coverage for distinct legacy settings, prompt metadata, argument shaping, auth and cancellation races; do not duplicate the package inventory or assert function arity instead of executing the tool. Mocked connection cancellation is one shared-owner case, not proof of real HTTP/stdio protocol phases.
 
-## Code quality
+## Code quality and verification
 
-- All Oxlint errors and warnings are blocking. Fix the underlying code; do not weaken, remove or disable rules just to make a change pass.
-- Do not add `oxlint-disable`, `eslint-disable`, `@ts-ignore` or `@ts-nocheck`. Inline lint suppressions are forbidden, including targeted directives.
-- Do not defer newly exposed lint failures. Fix them in the same change.
-- Do not work around complexity limits with meaningless wrappers or artificial file splitting. Separate real responsibilities and reuse SDK contracts.
-- After editing code, run `npm run lint:fix`. Before completion, run `npm run lint:agent` and relevant typechecks/tests.
-- Never claim a check passed unless it actually ran successfully.
+- Use the repository's npm scripts, lockfile, runtime, workspace structure and existing verification commands. Oxlint owns code quality; Oxfmt owns supported-file formatting; TypeScript and tests remain independent gates.
+- All Oxlint errors and warnings are blocking. Fix genuine findings in the current work; preserve strict Oxlint, Oxfmt, TypeScript and test coverage.
+- Preserve accurate API contracts and runtime behavior. Use validation, narrowing and sound type relationships, never unsafe assertions or compiler suppressions. Keep exported contracts explicit; prefer contextual inference where it is clearer.
+- Preserve required async ordering, cancellation, error identity and lifecycle ownership. Choose concurrency from dependencies and resource limits, not from lint heuristics.
+- Follow the semantic exceptions documented in README and `oxlint.config.ts`: declaration-qualified native handles, exact mutation/arity/undefined boundaries, and ordered modules. No generic Map/ReadonlyMap/Record/Readonly exemptions. Inferred parameters are deliberately outside readonly-parameter enforcement; do not remove meaningful annotations merely to evade it.
+- Only documented single-site `no-await-in-loop` and proven fail-closed conditional-assertion exceptions are authorized. Name the exact rule and provide a useful adjacent reason. Blanket disables, inline rule downgrades, unsafe-type/floating-promise suppressions, `@ts-ignore` and `@ts-nocheck` remain forbidden. Described `@ts-expect-error` belongs only in dedicated `*.test-d.ts` negative type tests.
+- Keep each exception narrowly scoped, explained and verifiable. The comment-aware directive checker and configuration regression suite enforce this policy; unused-disable reporting remains enabled.
+- Refactor along real responsibilities rather than wrappers, forwarding layers or mechanical file splitting. Do not weaken complexity ceilings to accommodate growth.
+- Review autofix changes. After editing code, run `npm run format`, `npm run lint:fix`, then `npm run format` and check convergence. Before completion, run `npm run format:check`, `npm run lint:agent`, canonical typechecks, relevant tests and the required packing/build gate.
+- Report commands actually executed, results, coverage, verification limits and remaining issues accurately. Never claim a check passed unless it ran successfully.

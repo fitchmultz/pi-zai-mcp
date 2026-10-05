@@ -12,10 +12,10 @@ Native `outputSchema`/`structuredContent` contain only the existing bounded serv
 
 The 0.2.2 source was qualified independently through the shared qualifier at automation `3b7a5f72d9c2d67d6fb53ef7bd308b005c385af3`, freezing these latest targets once for this run:
 
-| Target | Exact identity | SDK / bundled CLI SHA-256 |
-| --- | --- | --- |
-| Official Pi 1.0.3 | npm gitHead `d78dc83d633229d12f8b79631384c4c2717c399f` | `5482298b995db935f7b96f5d6056fa1c36ac6fc80456be594ef65b83c62b0d30` / `e79626f2dd6f94aa45d30f3fa63cd84319a6eefcd150b353cfaf274366926774` |
-| Maintained fork 1.0.3 | main `b6a8488fa2a6757ece93a38d3982afa0d92bbbb5` | `b1f7803e797740d70d30d6b56a4f6845da1f233ac354ffa38f1810a6902941c6` / `548f0205847f5fc9c1982f227d783c3db27dbacccc73805e3f961ab47f41fe85` |
+| Target                | Exact identity                                         | SDK / bundled CLI SHA-256                                                                                                               |
+| --------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Official Pi 1.0.3     | npm gitHead `d78dc83d633229d12f8b79631384c4c2717c399f` | `5482298b995db935f7b96f5d6056fa1c36ac6fc80456be594ef65b83c62b0d30` / `e79626f2dd6f94aa45d30f3fa63cd84319a6eefcd150b353cfaf274366926774` |
+| Maintained fork 1.0.3 | main `b6a8488fa2a6757ece93a38d3982afa0d92bbbb5`        | `b1f7803e797740d70d30d6b56a4f6845da1f233ac354ffa38f1810a6902941c6` / `548f0205847f5fc9c1982f227d783c3db27dbacccc73805e3f961ab47f41fe85` |
 
 Both used physical Node 24.21.0, npm 11.19.0, eight coherent Pi runtime companions at 1.0.3 and host TypeBox 1.3.27. The fork's complete native public-package receipt contains 13 archives, including `pi-durable`; selected graphs are not inferred from the extension's development lock. Isolated development contracts, fresh Git/npm consumers, native SDK loading and actual bundled CLI registration passed on both targets. All four native tests passed with zero skips. Packed executable source was byte-compared with the frozen worktree.
 

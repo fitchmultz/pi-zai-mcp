@@ -1,4 +1,3 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ZaiExtensionAPI } from "./register-tool.ts";
 import type { ManagedServer } from "./servers.ts";
 
@@ -15,17 +14,26 @@ function hasGlobalState(host: object): host is { [STATE_KEY]: GlobalState } {
 
 function globalState(): GlobalState {
   const host: object = globalThis;
-  if (hasGlobalState(host)) { return host[STATE_KEY]; }
-  const state: GlobalState = { activeServers: new Set<ManagedServer>(), warnedMissingApiKey: false };
+  if (hasGlobalState(host)) {
+    return host[STATE_KEY];
+  }
+  const state: GlobalState = {
+    activeServers: new Set<ManagedServer>(),
+    warnedMissingApiKey: false,
+  };
   Object.defineProperty(host, STATE_KEY, { value: state });
   return state;
 }
 
 export function addActiveServers(servers: readonly ManagedServer[]): () => void {
   const state = globalState();
-  for (const server of servers) { state.activeServers.add(server); }
+  for (const server of servers) {
+    state.activeServers.add(server);
+  }
   return () => {
-    for (const server of servers) { state.activeServers.delete(server); }
+    for (const server of servers) {
+      state.activeServers.delete(server);
+    }
   };
 }
 
@@ -35,7 +43,9 @@ export function getActiveServers(): ManagedServer[] {
 
 export function warnOnceIfMissingApiKey(hasApiKeySource: () => boolean, message: string): void {
   const state = globalState();
-  if (state.warnedMissingApiKey || hasApiKeySource()) { return; }
+  if (state.warnedMissingApiKey || hasApiKeySource()) {
+    return;
+  }
   state.warnedMissingApiKey = true;
   console.warn(message);
 }
@@ -46,10 +56,13 @@ export function resetGlobalStateForTests(): void {
   state.warnedMissingApiKey = false;
 }
 
-export function registerStatusCommand(pi: Readonly<Pick<ZaiExtensionAPI, "registerCommand">>, getStatusJson: () => string): void {
+export function registerStatusCommand(
+  pi: Readonly<Pick<ZaiExtensionAPI, "registerCommand">>,
+  getStatusJson: () => string,
+): void {
   pi.registerCommand("zai-mcp-status", {
     description: "Show configured Z.ai MCP servers and connection status",
-    handler: async (_args, ctx: Readonly<{ hasUI: boolean; mode: ExtensionContext["mode"]; ui: Readonly<Pick<ExtensionContext["ui"], "notify">> }>) => {
+    handler: async (_args, ctx) => {
       const status = getStatusJson();
       if (ctx.hasUI) {
         ctx.ui.notify(status, "info");

@@ -13,7 +13,12 @@ const require = createRequire(import.meta.url);
 export type ServerId = "search" | "reader" | "zread" | "vision";
 type ServerKind = "http" | "stdio";
 
-export const ALL_SERVER_IDS = ["search", "reader", "zread", "vision"] as const satisfies readonly ServerId[];
+export const ALL_SERVER_IDS = [
+  "search",
+  "reader",
+  "zread",
+  "vision",
+] as const satisfies readonly ServerId[];
 
 type ServerConfig = Readonly<{
   id: ServerId;
@@ -38,14 +43,18 @@ export type ManagedServer = ServerConfig & {
 
 function enabledServerIds(): Set<ServerId> | undefined {
   const raw = process.env.Z_AI_MCP_SERVERS;
-  if (raw === undefined || raw.trim().length === 0 || raw.trim().toLowerCase() === "all") {return undefined;}
+  if (raw === undefined || raw.trim().length === 0 || raw.trim().toLowerCase() === "all") {
+    return undefined;
+  }
 
   const enabled = new Set<ServerId>();
   const unknown: string[] = [];
 
   for (const value of raw.split(",")) {
     const id = value.trim().toLowerCase();
-    if (id.length === 0) {continue;}
+    if (id.length === 0) {
+      continue;
+    }
     const knownId = ALL_SERVER_IDS.find((candidate) => candidate === id);
     if (knownId !== undefined) {
       enabled.add(knownId);
@@ -55,7 +64,9 @@ function enabledServerIds(): Set<ServerId> | undefined {
   }
 
   if (unknown.length > 0) {
-    console.warn(`[${EXTENSION_NAME}] ignoring unknown Z_AI_MCP_SERVERS value(s): ${unknown.join(", ")}`);
+    console.warn(
+      `[${EXTENSION_NAME}] ignoring unknown Z_AI_MCP_SERVERS value(s): ${unknown.join(", ")}`,
+    );
   }
 
   return enabled;
@@ -65,13 +76,23 @@ function visionEnvironment(): Record<string, string> {
   const env: Record<string, string> = {};
   // The SDK supplies safe platform variables; only forward vendor-owned settings.
   for (const key of [
-    "Z_AI_MODE", "PLATFORM_MODE", "Z_AI_BASE_URL",
-    "Z_AI_VISION_MODEL", "Z_AI_VISION_MODEL_TEMPERATURE",
-    "Z_AI_VISION_MODEL_TOP_P", "Z_AI_VISION_MODEL_MAX_TOKENS",
-    "Z_AI_TIMEOUT", "Z_AI_RETRY_COUNT", "SERVER_NAME", "SERVER_VERSION", "ZAI_MCP_LOG_PATH",
+    "Z_AI_MODE",
+    "PLATFORM_MODE",
+    "Z_AI_BASE_URL",
+    "Z_AI_VISION_MODEL",
+    "Z_AI_VISION_MODEL_TEMPERATURE",
+    "Z_AI_VISION_MODEL_TOP_P",
+    "Z_AI_VISION_MODEL_MAX_TOKENS",
+    "Z_AI_TIMEOUT",
+    "Z_AI_RETRY_COUNT",
+    "SERVER_NAME",
+    "SERVER_VERSION",
+    "ZAI_MCP_LOG_PATH",
   ]) {
     const value = process.env[key];
-    if (value !== undefined) {env[key] = value;}
+    if (value !== undefined) {
+      env[key] = value;
+    }
   }
   if (env.Z_AI_BASE_URL !== undefined && env.Z_AI_BASE_URL.length > 0) {
     env.Z_AI_BASE_URL = `${env.Z_AI_BASE_URL.replace(/\/+$/, "")}/`;
@@ -99,7 +120,9 @@ function resolveVisionServerCommand(): { command: string; args: string[] } {
     binPath = bin[VISION_MCP_BIN];
   }
 
-  if (typeof binPath !== "string" || binPath.length === 0) {throw new Error(`${VISION_MCP_PACKAGE} does not declare the ${VISION_MCP_BIN} binary.`);}
+  if (typeof binPath !== "string" || binPath.length === 0) {
+    throw new Error(`${VISION_MCP_PACKAGE} does not declare the ${VISION_MCP_BIN} binary.`);
+  }
 
   return {
     command: process.execPath,
@@ -136,7 +159,10 @@ const SERVER_FACTORIES = {
       args: visionCommand.args,
       env: {
         ...visionEnvironment(),
-        Z_AI_MODE: process.env.Z_AI_MODE === undefined || process.env.Z_AI_MODE.length === 0 ? "ZAI" : process.env.Z_AI_MODE,
+        Z_AI_MODE:
+          process.env.Z_AI_MODE === undefined || process.env.Z_AI_MODE.length === 0
+            ? "ZAI"
+            : process.env.Z_AI_MODE,
       },
     };
   },
