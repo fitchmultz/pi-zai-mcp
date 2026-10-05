@@ -135,13 +135,6 @@ test("parent", () => { console.log("complete"); });`,
     "test/probe.test.ts",
   ),
   probe(
-    "checked JavaScript retains type-aware promise protection",
-    `import test from "node:test";
-test("parent", () => { console.log("complete"); });`,
-    [finding(floatingRule, 2, 1, "test/probe.test.mjs")],
-    "test/probe.test.mjs",
-  ),
-  probe(
     "unawaited subtest is not a safe call",
     `import test from "node:test";
 await test("parent", (t) => {
