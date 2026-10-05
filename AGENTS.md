@@ -6,7 +6,7 @@
 ## Learned Workspace Facts
 
 - Published unofficial pi extension exposing four curated Z.AI MCP tools: `z_ai_search`, `z_ai_reader`, `z_ai_zread`, and `z_ai_vision`.
-- Pi compatibility guidance lives in README/package metadata; implementation is centralized in `src/index.ts` with pi entry at `extensions/zai-mcp.ts`.
+- Pi compatibility guidance lives in README/package metadata. `src/index.ts` owns MCP orchestration; focused tool, output and runtime modules share behavior across split package resources. `extensions/zai-mcp.ts` is the legacy all-in-one entrypoint.
 
 ## Host qualification
 
@@ -15,3 +15,12 @@
 ## Test ownership
 
 `test/native-runtime.test.mjs` owns packaged split-resource loading, tool execution, shared status, and reload/shutdown. Keep smoke coverage for distinct legacy settings, prompt metadata, argument shaping, auth and cancellation races; do not duplicate the package inventory or assert function arity instead of executing the tool. Mocked connection cancellation is one shared-owner case, not proof of real HTTP/stdio protocol phases.
+
+## Code quality
+
+- All Oxlint errors and warnings are blocking. Fix the underlying code; do not weaken, remove or disable rules just to make a change pass.
+- Do not add `oxlint-disable`, `eslint-disable`, `@ts-ignore` or `@ts-nocheck`. Inline lint suppressions are forbidden, including targeted directives.
+- Do not defer newly exposed lint failures. Fix them in the same change.
+- Do not work around complexity limits with meaningless wrappers or artificial file splitting. Separate real responsibilities and reuse SDK contracts.
+- After editing code, run `npm run lint:fix`. Before completion, run `npm run lint:agent` and relevant typechecks/tests.
+- Never claim a check passed unless it actually ran successfully.

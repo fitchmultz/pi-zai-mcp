@@ -2,11 +2,42 @@
 
 ## Current contract
 
-Pi 1.0.0 is the supported floor. The five declared resources remain four curated Z.AI tools plus the status command. Connections are lazy and paid calls still require the existing user-intent and credential checks. Pi's native MCP feature is not a replacement for these curated tools or their bounded output and cancellation behavior.
+Pi 1.0.0 remains the suggested support floor, not a hard runtime pin. The five declared resources remain four curated Z.AI tools plus the status command. Connections are lazy and paid calls still require the existing user-intent and credential checks. Pi's native MCP feature is not a replacement for these curated tools or their bounded output and cancellation behavior.
 
 Service credentials use the explicit Z.AI environment variables first, then the native model registry's provider authentication for `zai`, `zai-coding-cn`, or catalog aliases with Z.AI endpoints. Pi owns credential-command expansion and caching; the extension does not read `auth.json`, execute shell templates, or retain a session context. The missing-key startup warning checks credential availability without resolving a command. Model headers alone do not supply a bearer key for this separate service.
 
 Native `outputSchema`/`structuredContent` contain only the existing bounded server/tool/text outcome, truncation flag and optional saved-file reference, not raw upstream MCP data. Shutdown aborts owned setup and requests, closes once, rejects queued calls and prevents late setup from publishing a client. Failures render as failures, never success, and are not automatically replayed.
+
+## GLM-5.3 quality and strict lint qualification — 2026-10-05
+
+The 0.2.2 source was qualified independently through the shared qualifier at automation `3b7a5f72d9c2d67d6fb53ef7bd308b005c385af3`, freezing these latest targets once for this run:
+
+| Target | Exact identity | SDK / bundled CLI SHA-256 |
+| --- | --- | --- |
+| Official Pi 1.0.3 | npm gitHead `d78dc83d633229d12f8b79631384c4c2717c399f` | `5482298b995db935f7b96f5d6056fa1c36ac6fc80456be594ef65b83c62b0d30` / `e79626f2dd6f94aa45d30f3fa63cd84319a6eefcd150b353cfaf274366926774` |
+| Maintained fork 1.0.3 | main `b6a8488fa2a6757ece93a38d3982afa0d92bbbb5` | `b1f7803e797740d70d30d6b56a4f6845da1f233ac354ffa38f1810a6902941c6` / `548f0205847f5fc9c1982f227d783c3db27dbacccc73805e3f961ab47f41fe85` |
+
+Both used physical Node 24.21.0, npm 11.19.0, eight coherent Pi runtime companions at 1.0.3 and host TypeBox 1.3.27. The fork's complete native public-package receipt contains 13 archives, including `pi-durable`; selected graphs are not inferred from the extension's development lock. Isolated development contracts, fresh Git/npm consumers, native SDK loading and actual bundled CLI registration passed on both targets. All four native tests passed with zero skips. Packed executable source was byte-compared with the frozen worktree.
+
+Oxlint 1.87.0 and oxlint-tsgolint 7.0.2003 implement the requested safety policy with type-aware linting, TypeScript diagnostics and warning denial. The initial 78-rule policy was qualified, then updated with the owner's final refinements: disable `require-await`, underscore naming and consistent-function-scoping; allow nullable-object conditions and shorthand void arrows; configure Vitest assertion helpers; distinguish production/fixture complexity ceilings; retain strict void-return, props-aware mutation, global await-loop protection and declaration-qualified readonly allowances.
+
+Final lint has zero diagnostics across 18 files/246 effective rules. All separate TypeScript checks, smokes, native contracts, packing and audits passed. Original negative controls demonstrated unsafe `any`, floating promises, mutation/readonly violations, same-name exception precision, TypeScript TS2322, targeted/block lint and TypeScript suppression rejection, and warning-only exit failure. A further 31 installed-binary controls validate the final options, assertion helper recognition, native-rule limits, complexity scopes, readonly declaration matching and retained safety rules. No lint debt is deferred.
+
+Production ceilings remain 10/3/4/40/80/500; existing fixture owners use bounded 15/4/4/70/150/600. The native execute callback retains its five-parameter allowance; no generated/declaration files exist. Await-loop exceptions are confined to ordered native authentication and shared native vision scenarios. Real native handle declarations replace handwritten platform facades; useful project-owned readonly collections and consumed SDK method contracts remain. Ordered loops replace recursive authentication and promise-reduced scenarios without changing auth priority or vision behavior.
+
+Installed controls prove `vitest/expect-expect` ignores `node:test` imports and `t.test`, while `vitest/no-conditional-expect` recognizes imported Vitest `expect` even inside native callbacks but ignores Node `assert.*`. Both are configured as requested, with no false native assertion-coverage claim, runner substitution or custom assertion guard. Both frozen hosts were requalified after these refinements: native 4/4 with zero skips, fresh Git/npm consumers, actual SDK/CLI and packed executable-byte parity all passed.
+
+The native large-output owner first reproduced a spread-argument `RangeError` with 160,000 valid MCP text blocks, then passed after loop-based aggregation. It checks complete saved bytes and private 0700/0600 modes. Offline real-child vision cases cover default Flash, FlashX, unrelated/custom-prefix models, explicit sampling/custom URLs, empty-URL vendor fallback and credential isolation.
+
+Separate authenticated checks used only public documentation/repositories and a generated red/blue PNG:
+
+- Native GLM-5.3 and Flash each completed a streamed two-round tool cycle at enabled/max reasoning, temperature 1/top-p 0.95, with parsed arguments and exact preserved reasoning replay. The intentional local GLM-5.3 400,000-token context cap remained intact.
+- Native Flash image input on the activated b6 fork returned red-left/blue-right and matched the enabled/max/sampling payload.
+- All four real MCP tools succeeded through the native validated tool boundary: search, full-page reader, Zread `vitejs/vite/package.json`, and bundled vision image analysis. Zread initially rejected this small extension repository as not found; the indexed public Vite fixture succeeded. Public repository access is therefore subject to upstream indexing, not guaranteed for every GitHub repository.
+
+These observations prove exercised request/response behavior and account access at the time, not comparative coding quality, billing, universal availability, or every HTTP/stdio cancellation phase. No private project content, credentials or reasoning text was included in receipts. Historical sections below retain their original scope.
+
+Final amended evidence: `/tmp/zai-quality-amended-{official,fork}-qualification/qualification.json` and `probes/`; `/tmp/zai-quality/final-amendments/{receipt.md,controls-results.json,frozen-inputs.json}`. Initial-policy evidence: `/tmp/zai-quality-final-{official,fork}-qualification/qualification.json` and `probes/`; `/tmp/zai-quality-hosts-final/fork-package/receipt.json`; `/tmp/zai-quality/{qualified-source-hashes,live-model-receipt,live-native-image-receipt,live-mcp-receipt}.json`; `/tmp/zai-updated-*.txt`. Later evidence-only documentation changes do not alter the qualified executable source.
 
 ## Vision dependency defaults — 2026-10-02
 
