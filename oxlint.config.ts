@@ -290,6 +290,7 @@ export default defineConfig({
     "no-new-func": "error",
     "no-with": "error",
     "no-debugger": "error",
+    "no-control-regex": "error",
     "no-empty": ["error", { allowEmptyCatch: false }],
     "no-empty-function": "error",
     "unicorn/no-useless-undefined": "error",
@@ -327,8 +328,10 @@ export default defineConfig({
         "**/*.test.{js,jsx,ts,tsx,mjs,cjs,mts,cts}",
         "**/*.spec.{js,jsx,ts,tsx,mjs,cjs,mts,cts}",
         "**/__tests__/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}",
+        "**/*.test-d.ts",
         "scripts/smoke.mjs",
         "test/fixtures/vision-offline.mjs",
+        "test/quality-fixtures.mjs",
       ],
       rules: {
         "typescript/no-unnecessary-condition": [
@@ -338,12 +341,9 @@ export default defineConfig({
         complexity: ["error", { max: 15, variant: "modified" }],
         "max-depth": ["error", { max: 4 }],
         "max-params": ["error", { max: 6 }],
-        "max-statements": ["error", { max: 80 }],
-        "max-lines-per-function": [
-          "error",
-          { max: 160, skipBlankLines: true, skipComments: true, IIFEs: true },
-        ],
-        "max-lines": ["error", { max: 1000, skipBlankLines: true, skipComments: true }],
+        "max-statements": "off",
+        "max-lines-per-function": "off",
+        "max-lines": "off",
       },
     },
     {

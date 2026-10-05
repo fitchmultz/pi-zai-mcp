@@ -20,6 +20,7 @@
     "src/**/*.ts",
     "extensions/**/*.ts",
     "scripts/**/*.mjs",
+    "test/**/*.ts",
     "test/**/*.mjs",
     "oxlint.config.ts"
   ]

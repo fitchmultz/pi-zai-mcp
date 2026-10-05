@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.3 - 2026-10-05
+
+- Complete strict Oxlint and Oxfmt integration with reproducible locked tooling, editor settings, comment-aware suppression enforcement and a canonical acceptance/CI gate.
+- Enable independent strict checked-JavaScript/TypeScript return-path analysis; preserve explicit native and exported contracts with declaration-qualified allowances.
+- Keep cohesive tests exempt from size/statement limits while retaining branching/parameter limits. Permit only explained, reproduced callback/lifecycle/validator exceptions; keep unsafe types, floating promises and nearby checks blocking.
+- Add real-CLI configuration regressions with precise diagnostics and fail-closed child handling, deterministic paused lifecycle guards, control-validator inputs and preserved checker limitations.
+- Separate cohesive curated schemas/metadata from MCP lifecycle ownership, restore native runtime equality assertions and remove redundant callback annotations without changing service behavior.
+- Keep npm-owned lockfile formatting, native asynchronous ordering/cancellation, environment isolation, argument-presence semantics and all four curated tools intact.
+
 ## 0.2.2 - 2026-10-05
 
 - Align GLM-5.3-Flash/FlashX vision sampling with Z.AI's recommended temperature 1 / top-p 0.95 while preserving explicit overrides and other-model defaults.

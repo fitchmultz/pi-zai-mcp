@@ -1,6 +1,6 @@
 {
   "name": "pi-zai-mcp",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Unofficial pi package that exposes Z.ai MCP server tools for web search, URL reading, repository reading, and vision workflows.",
   "type": "module",
   "author": "Mitch Fultz (https://github.com/fitchmultz)",
@@ -35,15 +35,23 @@
     "scripts"
   ],
   "scripts": {
-    "check:compat": "npm run lint:agent && npm run typecheck && npm run smoke && node --experimental-strip-types --test test/native-runtime.test.mjs && npm pack --dry-run",
+    "check:compat": "npm run check",
     "typecheck": "tsc --noEmit",
-    "lint": "node scripts/check-lint-directives.mjs && oxlint --config oxlint.config.ts --deny-warnings .",
+    "lint": "npm run lint:policy && oxlint --config oxlint.config.ts --type-aware --type-check --deny-warnings .",
     "lint:agent": "npm run lint -- --format=agent",
-    "lint:fix": "node scripts/check-lint-directives.mjs && oxlint --config oxlint.config.ts --fix .",
-    "check": "npm run lint:agent",
+    "lint:fix": "npm run lint:policy && oxlint --config oxlint.config.ts --type-aware --fix .",
+    "lint:policy": "node scripts/check-lint-directives.mjs",
+    "format": "oxfmt --ignore-path .gitignore --ignore-path .oxfmtignore --write .",
+    "format:check": "oxfmt --ignore-path .gitignore --ignore-path .oxfmtignore --check .",
+    "test:quality": "node --experimental-strip-types --test test/quality-config.test.mjs",
+    "test:runtime": "node --experimental-strip-types --test test/native-runtime.test.mjs",
+    "test": "npm run test:quality && npm run test:runtime",
+    "quality": "npm run lint:agent && npm run format:check && npm run test:quality",
+    "build": "npm pack --dry-run",
+    "check": "npm run quality && npm run typecheck && npm run smoke && npm run test:runtime && npm run build",
     "release:dry-run": "npm run ci && npm publish --dry-run",
     "smoke": "node --experimental-strip-types scripts/smoke.mjs",
-    "ci": "npm run lint:agent && npm run typecheck && npm run smoke && npm audit --omit=dev && npm pack --dry-run"
+    "ci": "npm run check && npm audit --omit=dev"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
