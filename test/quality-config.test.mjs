@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   checker,
@@ -696,6 +696,8 @@ export const pattern = /oxlint-disable/;
 const policyReason = /Only documented single-site .*exceptions are approved\./;
 const typeReason =
   /Compiler suppressions require a described @ts-expect-error.*dedicated \*\.test-d\.ts type test\./;
+const multilineReason =
+  /Lint directives must use a single-line comment; continuation lines can hide extra rules\./;
 
 await test("comment policy: exact approved sites and forbidden suppression forms", async (t) => {
   /** @type {readonly Readonly<{name: string; comment: string; file: string; reason: RegExp | ""; line?: number}>[]} */
@@ -706,6 +708,44 @@ await test("comment policy: exact approved sites and forbidden suppression forms
         "// Each journal commit must finish before the next entry is written.\n// oxlint-disable-next-line no-await-in-loop",
       file: "src/probe.ts",
       reason: "",
+    },
+    {
+      name: "single-line block directive with adjacent reason",
+      comment:
+        "// Each journal commit must finish before the next entry is written.\n/* oxlint-disable-next-line no-await-in-loop */",
+      file: "src/probe.ts",
+      reason: "",
+    },
+    {
+      name: "multiline adjacent explanation is not a multiline directive",
+      comment:
+        "/* Each journal commit must finish before the next entry is written.\n * Concurrent writes would reorder the durable journal. */\n// oxlint-disable-next-line no-await-in-loop",
+      file: "src/probe.ts",
+      reason: "",
+    },
+    {
+      name: "multiline block hides an unapproved second rule",
+      comment:
+        "// Each journal commit must finish before the next entry is written.\n/* oxlint-disable-next-line no-await-in-loop\n no-debugger */",
+      file: "src/probe.ts",
+      reason: multilineReason,
+      line: 2,
+    },
+    {
+      name: "multiline block hides an approved second rule",
+      comment:
+        "// Each journal commit must finish before the next entry is written.\n/* oxlint-disable-next-line no-await-in-loop\n no-control-regex */",
+      file: "src/probe.ts",
+      reason: multilineReason,
+      line: 2,
+    },
+    {
+      name: "multiline directive is forbidden even without a second rule",
+      comment:
+        "// Each journal commit must finish before the next entry is written.\n/* oxlint-disable-next-line no-await-in-loop\n */",
+      file: "src/probe.ts",
+      reason: multilineReason,
+      line: 2,
     },
     {
       name: "inline fail-closed reason",
@@ -862,6 +902,24 @@ await test("comment policy: exact approved sites and forbidden suppression forms
       reason: typeReason,
     },
     {
+      name: "compiler-recognized ts-ignore suffix",
+      comment: "// @ts-ignoreSuffix",
+      file: "src/probe.ts",
+      reason: typeReason,
+    },
+    {
+      name: "compiler-recognized ts-nocheck suffix",
+      comment: "// @ts-nocheck_suffix",
+      file: "src/probe.ts",
+      reason: typeReason,
+    },
+    {
+      name: "noncanonical expect-error suffix is not a dedicated type-test allowance",
+      comment: "// @ts-expect-errorSuffix: This assignment must reject nonstring input.",
+      file: "test/contracts.test-d.ts",
+      reason: typeReason,
+    },
+    {
       name: "ts-nocheck",
       comment: "// @ts-nocheck",
       file: "test/contracts.test-d.ts",
@@ -921,6 +979,55 @@ await test("comment policy: exact approved sites and forbidden suppression forms
           result.stderr.slice(prefix.length),
           entry.reason,
           "Policy category, not an unrelated parser/process failure",
+        );
+      }),
+    ),
+  );
+});
+
+await test("comment policy rejects actual native multiline suppressions that silence strict lint", async (t) => {
+  const entries = [
+    {
+      name: "debugger hidden after approved sequencing rule",
+      rules: "no-debugger",
+      statement: "debugger; await entry;",
+      findings: [finding("eslint(no-debugger)", 6, 5), finding("eslint(no-await-in-loop)", 6, 15)],
+    },
+    {
+      name: "core promise protection hidden after approved sequencing rule",
+      rules: "typescript/no-floating-promises promise/catch-or-return",
+      statement: "Promise.resolve(await entry);",
+      findings: [
+        finding(floatingRule, 6, 5),
+        finding("promise(catch-or-return)", 6, 5),
+        finding("eslint(no-await-in-loop)", 6, 21),
+      ],
+    },
+  ];
+  await Promise.all(
+    entries.map((entry) =>
+      t.test(entry.name, async (child) => {
+        const directive = `/* oxlint-disable-next-line no-await-in-loop\n     ${entry.rules} */`;
+        const source = `export async function commit(entries: readonly Promise<string>[]): Promise<void> {
+  for (const entry of entries) {
+    // Each journal commit must finish before the next entry is written.
+    ${directive}
+    ${entry.statement}
+  }
+}\n`;
+        const root = await project(child, "src/probe.ts", source);
+        const args = ["--config", "oxlint.config.ts", "--format=json", "src/probe.ts"];
+        // The installed native CLI really consumes both continuation rules.
+        compareLint(run(oxlint, args, root), root, []);
+        await writeFile(join(root, "src/probe.ts"), source.replace(directive, "\n"));
+        compareLint(run(oxlint, args, root), root, entry.findings);
+        await writeFile(join(root, "src/probe.ts"), source);
+        const policy = run(process.execPath, [checker, "src/probe.ts"], root);
+        assert.equal(policy.status, 1);
+        assert.equal(policy.stdout, "");
+        assert.equal(
+          policy.stderr,
+          "src/probe.ts:4: Lint directives must use a single-line comment; continuation lines can hide extra rules.\n",
         );
       }),
     ),

@@ -57,13 +57,13 @@ function diagnostic(value, root) {
   };
 }
 
-/** @param {ReturnType<typeof run>} result @param {string} root @param {readonly Finding[]} expected @returns {void} */
-export function compareLint(result, root, expected) {
+/** @param {ReturnType<typeof run>} result @param {string} root @param {readonly Finding[]} expected @param {number} files @returns {void} */
+function compareDiagnostics(result, root, expected, files) {
   assert.equal(result.stderr, "", "Unexpected CLI/config/TypeScript stderr");
   /** @type {unknown} */
   const output = JSON.parse(result.stdout);
   assert.ok(isRecord(output), "Oxlint output must be an object");
-  assert.equal(output.number_of_files, 1, "The exact probe must be linted");
+  assert.equal(output.number_of_files, files, "The exact probe files must be linted");
   assert.ok(Array.isArray(output.diagnostics));
   const actual = output.diagnostics.map((entry) => diagnostic(entry, root));
   const wanted = expected.map((entry) => ({ ...entry, filename: resolve(root, entry.filename) }));
@@ -75,6 +75,24 @@ export function compareLint(result, root, expected) {
     "Complete diagnostic IDs and primary locations",
   );
   assert.equal(result.status, expected.length === 0 ? 0 : 1, "Exit must agree with exact findings");
+}
+
+/** @param {ReturnType<typeof run>} result @param {string} root @param {readonly Finding[]} expected @param {number} files @returns {void} */
+export function compareLint(result, root, expected, files = 1) {
+  assert.ok(
+    expected.every((entry) => !/^typescript\(TS\d+\)$/.test(entry.code ?? "")),
+    "Compiler findings belong to the separate compiler evaluator",
+  );
+  compareDiagnostics(result, root, expected, files);
+}
+
+/** @param {ReturnType<typeof run>} result @param {string} root @param {readonly Finding[]} expected @param {number} files @returns {void} */
+export function compareCompiler(result, root, expected, files = 1) {
+  assert.ok(
+    expected.every((entry) => /^typescript\(TS\d+\)$/.test(entry.code ?? "")),
+    "Compiler probes must not accept lint-rule findings",
+  );
+  compareDiagnostics(result, root, expected, files);
 }
 
 /** @param {import("node:test").TestContext} t @param {string} file @param {string} source @param {Readonly<Record<string, string>>} declarations @returns {Promise<string>} */
