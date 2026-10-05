@@ -10,11 +10,11 @@ on:
       official-version:
         description: Official stable version resolved for this run; blank resolves latest
         type: string
-        default: ''
+        default: ""
       fork-ref:
         description: Maintained fork commit resolved for this run; blank resolves main
         type: string
-        default: ''
+        default: ""
 
 permissions:
   contents: read
@@ -24,6 +24,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Use the repository package manager
+        run: npm install --global "$(node -p 'require("./package.json").packageManager')"
+      - run: npm ci
+      - name: Enforce the canonical acceptance workflow
+        run: npm run check
+
   compatibility:
     uses: fitchmultz/.github/.github/workflows/pi-compatibility.yml@3b7a5f72d9c2d67d6fb53ef7bd308b005c385af3 # main
     with:
