@@ -1,47 +1,55 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ZaiExtensionAPI } from "./register-tool.ts";
+import type { ManagedServer } from "./servers.ts";
 
-type GlobalState<T> = {
-  activeServers: Set<T>;
+type GlobalState = {
+  activeServers: Set<ManagedServer>;
   warnedMissingApiKey: boolean;
 };
 
 const STATE_KEY = Symbol.for("pi-zai-mcp.state");
 
-function globalState<T>(): GlobalState<T> {
-  const global = globalThis as typeof globalThis & { [STATE_KEY]?: GlobalState<T> };
-  global[STATE_KEY] ??= { activeServers: new Set<T>(), warnedMissingApiKey: false };
-  return global[STATE_KEY];
+function hasGlobalState(host: object): host is { [STATE_KEY]: GlobalState } {
+  return STATE_KEY in host;
 }
 
-export function addActiveServers<T>(servers: readonly T[]): () => void {
-  const state = globalState<T>();
-  for (const server of servers) state.activeServers.add(server);
+function globalState(): GlobalState {
+  const host: object = globalThis;
+  if (hasGlobalState(host)) { return host[STATE_KEY]; }
+  const state: GlobalState = { activeServers: new Set<ManagedServer>(), warnedMissingApiKey: false };
+  Object.defineProperty(host, STATE_KEY, { value: state });
+  return state;
+}
+
+export function addActiveServers(servers: readonly ManagedServer[]): () => void {
+  const state = globalState();
+  for (const server of servers) { state.activeServers.add(server); }
   return () => {
-    for (const server of servers) state.activeServers.delete(server);
+    for (const server of servers) { state.activeServers.delete(server); }
   };
 }
 
-export function getActiveServers<T>(): T[] {
-  return [...globalState<T>().activeServers];
+export function getActiveServers(): ManagedServer[] {
+  return [...globalState().activeServers];
 }
 
 export function warnOnceIfMissingApiKey(hasApiKeySource: () => boolean, message: string): void {
-  const state = globalState<unknown>();
-  if (state.warnedMissingApiKey || hasApiKeySource()) return;
+  const state = globalState();
+  if (state.warnedMissingApiKey || hasApiKeySource()) { return; }
   state.warnedMissingApiKey = true;
   console.warn(message);
 }
 
 export function resetGlobalStateForTests(): void {
-  const state = globalState<unknown>();
+  const state = globalState();
   state.activeServers.clear();
   state.warnedMissingApiKey = false;
 }
 
-export function registerStatusCommand(pi: ExtensionAPI, getStatusJson: () => string): void {
+export function registerStatusCommand(pi: Readonly<Pick<ZaiExtensionAPI, "registerCommand">>, getStatusJson: () => string): void {
   pi.registerCommand("zai-mcp-status", {
     description: "Show configured Z.ai MCP servers and connection status",
-    handler: async (_args, ctx) => {
+    handler: (_args, ctx: Readonly<{ hasUI: boolean; mode: ExtensionContext["mode"]; ui: Readonly<Pick<ExtensionContext["ui"], "notify">> }>) => {
       const status = getStatusJson();
       if (ctx.hasUI) {
         ctx.ui.notify(status, "info");
@@ -49,6 +57,7 @@ export function registerStatusCommand(pi: ExtensionAPI, getStatusJson: () => str
         const stream = ctx.mode === "print" ? process.stdout : process.stderr;
         stream.write(`${status}\n`);
       }
+      return Promise.resolve();
     },
   });
 }

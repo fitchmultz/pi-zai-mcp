@@ -4,11 +4,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ModelRuntime, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { InMemoryModelsStore } from "@earendil-works/pi-ai";
-import { __test, default as zaiMcpExtension } from "../src/index.ts";
+import { testHelpers, default as zaiMcpExtension } from "../src/index.ts";
 import zaiMcpSearch from "../extensions/zai-mcp-search.ts";
 import zaiMcpStatus from "../extensions/zai-mcp-status.ts";
 
+// ponytail: retain native equality checks without redundant type narrowing; restore the predicates when Oxlint recognizes value assertions.
+/** @type {(actual: unknown, expected: unknown, message?: string | Readonly<Error>) => void} */
+const equal = assert.strictEqual;
+/** @type {(actual: unknown, expected: unknown, message?: string | Readonly<Error>) => void} */
+const deepEqual = assert.deepStrictEqual;
+
+/** @typedef {import("@earendil-works/pi-coding-agent").ToolDefinition<import("typebox").TSchema, import("../src/register-tool.ts").CuratedDetails, unknown>} NativeTool */
+/** @typedef {Readonly<Pick<NativeTool, "name" | "promptSnippet" | "execute">> & {readonly promptGuidelines?: readonly string[]}} SmokeTool */
+/** @typedef {Readonly<Pick<import("@earendil-works/pi-coding-agent").RegisteredCommand, "handler">>} SmokeCommand */
+
+/** @param {Readonly<{name: string}>} tool */
+function toolName(tool) { return tool.name; }
+
 const savedEnv = { ...process.env };
+/** @param {string} agentDir */
 async function registryFor(agentDir) {
   return new ModelRegistry(await ModelRuntime.create({ authPath: join(agentDir, "auth.json"), modelsPath: join(agentDir, "models.json"), modelsStore: new InMemoryModelsStore(), allowModelNetwork: false }));
 }
@@ -17,10 +31,12 @@ function restoreEnv() {
   process.env = { ...savedEnv };
 }
 
+/** @param {() => void} fn */
 function captureWarn(fn) {
   const original = console.warn;
+  /** @type {string[]} */
   const warnings = [];
-  console.warn = (message) => warnings.push(String(message));
+  console.warn = (message) => { warnings.push(String(message)); };
   try {
     fn();
     return warnings;
@@ -37,21 +53,26 @@ function loadExtension(env = {}, extension = zaiMcpExtension) {
   delete process.env.PI_CODING_AGENT_DIR;
   Object.assign(process.env, { Z_AI_API_KEY: "test-key", ...env });
 
+  /** @type {SmokeTool[]} */
   const tools = [];
+  /** @type {Map<string, SmokeCommand>} */
   const commands = new Map();
   const pi = {
-    registerTool: (tool) => tools.push(tool),
-    registerCommand: (name, command) => commands.set(name, command),
-    on: () => undefined,
+    /** @param {typeof tools[number]} tool */
+    registerTool: (tool) => { tools.push(tool); },
+    /** @param {string} name @param {SmokeCommand} command */
+    registerCommand: (name, command) => { commands.set(name, command); },
+    on: () => { /* Lifecycle hooks are exercised by the native runtime owner. */ },
   };
-  const warnings = captureWarn(() => extension(pi));
+  const warnings = captureWarn(() =>{  extension(pi); });
   return { tools, commands, warnings };
 }
 
+/** @param {NodeJS.WriteStream} stream @param {() => Promise<void>} fn */
 function patchWrite(stream, fn) {
-  const original = stream.write;
+  const original = stream.write.bind(stream);
   let output = "";
-  stream.write = (chunk) => {
+  stream.write = /** @param {string | Readonly<Pick<Uint8Array, "toString">>} chunk */ (chunk) => {
     output += String(chunk);
     return true;
   };
@@ -63,40 +84,40 @@ function patchWrite(stream, fn) {
     });
 }
 
-__test.resetGlobalStateForTests();
+testHelpers.resetGlobalStateForTests();
 const loaded = loadExtension();
-assert.deepEqual(
-  loaded.tools.map((tool) => tool.name),
+deepEqual(
+  loaded.tools.map(toolName),
   ["z_ai_search", "z_ai_reader", "z_ai_zread", "z_ai_vision"],
 );
 assert.ok(loaded.commands.has("zai-mcp-status"));
 
 const searchOnly = loadExtension({ Z_AI_MCP_SERVERS: "search,unknown" });
-assert.deepEqual(searchOnly.tools.map((tool) => tool.name), ["z_ai_search"]);
+deepEqual(searchOnly.tools.map(toolName), ["z_ai_search"]);
 assert.match(searchOnly.warnings.join("\n"), /ignoring unknown Z_AI_MCP_SERVERS/);
 
 for (const tool of loaded.tools) {
-  assert.ok(tool.promptSnippet, `${tool.name} declares prompt routing metadata`);
-  assert.ok(tool.promptGuidelines.every((guideline) => guideline.includes(tool.name)), `${tool.name} names itself in every prompt guideline`);
+  assert.ok(tool.promptSnippet !== undefined && tool.promptSnippet.length > 0, `${tool.name} declares prompt routing metadata`);
+  assert.ok(tool.promptGuidelines !== undefined && tool.promptGuidelines.every((guideline) => guideline.includes(tool.name)), `${tool.name} names itself in every prompt guideline`);
 }
-assert.deepEqual(loadExtension({ Z_AI_MCP_SERVERS: "reader" }, zaiMcpSearch).tools.map((tool) => tool.name), ["z_ai_search"]);
-assert.deepEqual(loadExtension({}, zaiMcpStatus).tools, []);
+deepEqual(loadExtension({ Z_AI_MCP_SERVERS: "reader" }, zaiMcpSearch).tools.map(toolName), ["z_ai_search"]);
+deepEqual(loadExtension({}, zaiMcpStatus).tools, []);
 
 const none = loadExtension({ Z_AI_MCP_SERVERS: "unknown" });
-assert.equal(none.tools.length, 0);
+equal(none.tools.length, 0);
 assert.match(none.warnings.join("\n"), /no Z\.AI MCP servers enabled/);
 
-assert.deepEqual(
-  __test.searchArgs({ query: "current pi docs", content_size: "medium" }),
+deepEqual(
+  testHelpers.searchArgs({ query: "current pi docs", content_size: "medium" }),
   { search_query: "current pi docs", search_domain_filter: undefined, search_recency_filter: undefined, content_size: "medium", location: undefined },
 );
 
-assert.deepEqual(
-  __test.visionArgs({ action: "analyze_image", image_source: "@screenshots/app.png", prompt: "describe" }),
+deepEqual(
+  testHelpers.visionArgs({ action: "analyze_image", image_source: "@screenshots/app.png", prompt: "describe" }),
   { image_source: "screenshots/app.png", prompt: "describe" },
 );
-assert.deepEqual(
-  __test.visionArgs({
+deepEqual(
+  testHelpers.visionArgs({
     action: "ui_diff_check",
     expected_image_source: "@expected.png",
     actual_image_source: "@actual.png",
@@ -104,36 +125,38 @@ assert.deepEqual(
   }),
   { expected_image_source: "expected.png", actual_image_source: "actual.png", prompt: "compare" },
 );
-assert.deepEqual(
-  __test.visionArgs({ action: "analyze_video", video_source: "@demo.mp4", prompt: "summarize" }),
+deepEqual(
+  testHelpers.visionArgs({ action: "analyze_video", video_source: "@demo.mp4", prompt: "summarize" }),
   { video_source: "demo.mp4", prompt: "summarize" },
 );
 
-const truncated = await __test.truncateForTool("small");
-assert.equal(truncated.content, "small");
-assert.deepEqual(truncated.details, { truncated: false });
+const truncated = await testHelpers.truncateForTool("small");
+equal(truncated.content, "small");
+deepEqual(truncated.details, { truncated: false });
 
 {
   let closeCalls = 0;
-  let connectOptions;
-  const transport = { close: async () => { closeCalls += 1; } };
+  /** @type {PromiseWithResolvers<{ signal: AbortSignal }>} */
+  const started = Promise.withResolvers();
+  const transport = { close: () => { closeCalls += 1; return Promise.resolve(); } };
   const client = {
-    connect: async (_transport, options) => {
-      connectOptions = options;
-      await new Promise(() => undefined);
+    /** @param {unknown} _transport @param {Readonly<{ signal: Readonly<AbortSignal> }>} options */
+    connect: (_transport, options) => {
+      started.resolve(options);
+      return Promise.withResolvers().promise;
     },
   };
   const server = { id: "search", kind: "http" };
   const controller = new AbortController();
-  const connecting = __test.connectWith(server, controller.signal, () => ({ client, transport }));
-  while (!connectOptions) await Promise.resolve();
+  const connecting = testHelpers.connectWith(server, controller.signal, () => ({ client, transport }));
+  const connectOptions = await started.promise;
   controller.abort();
   await assert.rejects(connecting, /cancelled while connecting/);
-  assert.equal(connectOptions.signal.aborted, true, "connecting receives Pi cancellation");
-  assert.equal(closeCalls, 1, "cancellation closes the owned transport once");
-  assert.equal(server.client, undefined);
-  assert.equal(server.transport, undefined);
-  assert.equal(server.connectPromise, undefined);
+  equal(connectOptions.signal.aborted, true, "connecting receives Pi cancellation");
+  equal(closeCalls, 1, "cancellation closes the owned transport once");
+  equal(server.client, undefined);
+  equal(server.transport, undefined);
+  equal(server.connectPromise, undefined);
 }
 
 {
@@ -145,52 +168,55 @@ assert.deepEqual(truncated.details, { truncated: false });
     kind: "http",
     client: {},
     transport: {
-      terminateSession: () => new Promise(() => undefined),
-      close: async () => { hangingCloseCalls += 1; },
+      terminateSession: () => Promise.withResolvers().promise,
+      close: () => { hangingCloseCalls += 1; return Promise.resolve(); },
     },
-    connectPromise: new Promise(() => undefined),
-    callQueue: new Promise(() => undefined),
+    connectPromise: Promise.withResolvers().promise,
+    callQueue: Promise.withResolvers().promise,
   };
   const rejected = {
     id: "reader",
     label: "rejected HTTP shutdown",
     kind: "http",
     transport: {
-      terminateSession: async () => { throw new Error("delete failed"); },
-      close: async () => { rejectedCloseCalls += 1; },
+      terminateSession: () => Promise.reject(new Error("delete failed")),
+      close: () => { rejectedCloseCalls += 1; return Promise.resolve(); },
     },
   };
   const started = Date.now();
-  await __test.closeServers([hanging, rejected], 20);
+  await testHelpers.closeServers([hanging, rejected], 20);
   assert.ok(Date.now() - started < 500, "shutdown remains bounded when HTTP DELETE never settles");
-  assert.equal(hangingCloseCalls, 1, "timed-out HTTP termination still closes transport");
-  assert.equal(rejectedCloseCalls, 1, "failed HTTP termination still closes transport");
-  assert.equal(hanging.client, undefined);
-  assert.equal(hanging.transport, undefined);
-  assert.equal(hanging.connectPromise, undefined);
-  assert.equal(hanging.callQueue, undefined, "shutdown resets the per-server call queue");
+  equal(hangingCloseCalls, 1, "timed-out HTTP termination still closes transport");
+  equal(rejectedCloseCalls, 1, "failed HTTP termination still closes transport");
+  equal(hanging.client, undefined);
+  equal(hanging.transport, undefined);
+  equal(hanging.connectPromise, undefined);
+  equal(hanging.callQueue, undefined, "shutdown resets the per-server call queue");
 }
 
 const missingKeyAgentDir = await mkdtemp(join(tmpdir(), "pi-zai-mcp-missing-key-"));
-for (const phase of ["authentication", "initialize"]) {
-  let release, closeCalls = 0, connects = 0;
-  const wait = new Promise(resolve => { release = resolve; });
-  const transport = { terminateSession: async () => {}, close: async () => { closeCalls++; } };
-  const client = { connect: async () => { connects++; if (phase === "initialize") await wait; } };
+await Promise.all(["authentication", "initialize"].map(async (phase) => {
+  let closeCalls = 0;
+  /** @type {PromiseWithResolvers<void>} */
+  const wait = Promise.withResolvers();
+  /** @type {PromiseWithResolvers<void>} */
+  const started = Promise.withResolvers();
+  const transport = { terminateSession: () => Promise.resolve(), close: () => { closeCalls++; return Promise.resolve(); } };
+  const client = { connect: () => { started.resolve(); return phase === "initialize" ? wait.promise : Promise.resolve(); } };
   const server = { id: "search", kind: "http" };
-  const pending = __test.connectWith(server, undefined, async () => {
-    if (phase === "authentication") await wait;
+  const pending = testHelpers.connectWith(server, undefined, async () => {
+    if (phase === "authentication") { await wait.promise; }
     return { client, transport };
   });
   const rejected = assert.rejects(pending, /cancelled|shut down/);
-  if (phase === "initialize") while (!connects) await Promise.resolve();
-  await Promise.all([__test.closeServers([server]), __test.closeServers([server])]);
-  release();
+  if (phase === "initialize") { await started.promise; }
+  await Promise.all([testHelpers.closeServers([server]), testHelpers.closeServers([server])]);
+  wait.resolve();
   await rejected;
-  assert.equal(closeCalls, 1, `${phase}: teardown closes each owned transport once`);
-  assert.equal(server.client, undefined, `${phase}: late setup cannot publish a stale client`);
-  await assert.rejects(() => __test.connectWith(server, undefined, () => ({ client, transport })), /shut down/);
-}
+  equal(closeCalls, 1, `${phase}: teardown closes each owned transport once`);
+  equal(server.client, undefined, `${phase}: late setup cannot publish a stale client`);
+  await assert.rejects(() => testHelpers.connectWith(server, undefined, () => ({ client, transport })), /shut down/);
+}));
 try {
   restoreEnv();
   delete process.env.Z_AI_API_KEY;
@@ -220,9 +246,9 @@ try {
     "utf8",
   );
   const registry = await registryFor(agentDir);
-  assert.equal(await __test.getApiKey(registry), "stored-key");
+  equal(await testHelpers.getApiKey(registry), "stored-key");
   process.env.Z_AI_API_KEY = "env-key";
-  assert.equal(await __test.getApiKey(registry), "env-key");
+  equal(await testHelpers.getApiKey(registry), "env-key");
 } finally {
   await rm(agentDir, { recursive: true, force: true });
 }
@@ -241,9 +267,9 @@ try {
     "utf8",
   );
   const registry = await registryFor(codingCnAgentDir);
-  assert.equal(await __test.getApiKey(registry), "cn-stored-key", "should read key stored under the zai-coding-cn provider");
+  equal(await testHelpers.getApiKey(registry), "cn-stored-key", "should read key stored under the zai-coding-cn provider");
   process.env.ZAI_CODING_CN_API_KEY = "cn-env-key";
-  assert.equal(await __test.getApiKey(registry), "cn-env-key", "ZAI_CODING_CN_API_KEY env should take precedence");
+  equal(await testHelpers.getApiKey(registry), "cn-env-key", "ZAI_CODING_CN_API_KEY env should take precedence");
 } finally {
   await rm(codingCnAgentDir, { recursive: true, force: true });
 }
@@ -273,7 +299,7 @@ try {
     "utf8",
   );
   const registry = await registryFor(customProviderAgentDir);
-  assert.equal(await __test.getApiKey(registry), "custom-zai-key", "should read key from a custom models.json provider pointing at a Z.AI endpoint");
+  equal(await testHelpers.getApiKey(registry), "custom-zai-key", "should read key from a custom models.json provider pointing at a Z.AI endpoint");
 } finally {
   await rm(customProviderAgentDir, { recursive: true, force: true });
 }
@@ -299,25 +325,27 @@ try {
   await assert.rejects(() => access(marker));
   const registry = await registryFor(commandAgentDir);
   const hostRefreshRuns = await readFile(marker, "utf8");
-  assert.equal(__test.hasApiKeySource(registry), true);
-  assert.equal(await readFile(marker, "utf8"), hostRefreshRuns, "extension status must not execute auth commands beyond native host refresh");
-  assert.equal(await __test.getApiKey(registry), "command-key");
-  assert.equal(await __test.getApiKey(registry), "command-key");
-  assert.equal(await readFile(marker, "utf8"), "x");
+  equal(testHelpers.hasApiKeySource(registry), true);
+  equal(await readFile(marker, "utf8"), hostRefreshRuns, "extension status must not execute auth commands beyond native host refresh");
+  equal(await testHelpers.getApiKey(registry), "command-key");
+  equal(await testHelpers.getApiKey(registry), "command-key");
+  equal(await readFile(marker, "utf8"), "x");
 } finally {
   await rm(commandAgentDir, { recursive: true, force: true });
 }
 
-__test.resetGlobalStateForTests();
+testHelpers.resetGlobalStateForTests();
 const statusLoaded = loadExtension();
 const command = statusLoaded.commands.get("zai-mcp-status");
-let rpcNotification;
+assert.ok(command !== undefined);
+/** @type {{message: string, type?: string}} */
+let rpcNotification = { message: "" };
 await command.handler("", {
   hasUI: true,
   mode: "rpc",
-  ui: { notify: (message, type) => (rpcNotification = { message, type }) },
+  ui: { /** @param {string} message @param {string} type */ notify: (message, type) => { rpcNotification = { message, type }; } },
 });
-assert.equal(rpcNotification.type, "info");
+equal(rpcNotification.type, "info");
 assert.match(rpcNotification.message, /lazy_not_connected_until_first_use/);
 
 const jsonOutput = await patchWrite(process.stderr, () =>

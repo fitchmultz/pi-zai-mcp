@@ -2,7 +2,7 @@
 
 Give pi agents Z.ai-powered web search, URL reading, repository reading, and vision tools through MCP without leaving a pi session. This is an unofficial community package, not an official Z.ai package.
 
-This package focuses on Z.AI MCP servers. GLM-5.2 model access is already covered by pi's built-in `zai` provider (`ZAI_API_KEY`) and the OpenAI-compatible Z.AI API; this package adds the external MCP context/tools that Z.AI documents for coding agents.
+This package focuses on Z.AI MCP servers. GLM-5.3 model access is covered by Pi's built-in `zai` Coding Plan provider (`ZAI_API_KEY`); this package adds external research and vision tools. Model selection, reasoning, streaming and conversation history remain native Pi capabilities, not a second model client.
 
 ## What you get
 
@@ -17,9 +17,11 @@ Z.AI also documents Slide/Poster, Translation, and Video Effect Template agents 
 
 ## Z.AI MCP coverage
 
-Reviewed Z.AI docs on 2026-06-05:
+Reviewed the [quick start](https://docs.z.ai/guides/overview/quick-start), [GLM-5.3](https://docs.z.ai/guides/llm/glm-5.3), [Flash/FlashX](https://docs.z.ai/guides/vlm/glm-5.3-flash), [migration](https://docs.z.ai/guides/overview/migrate-to-glm-new), capability and Coding Plan/MCP documentation on **2026-10-05**:
 
-- GLM-5.2 supports text input/output, 200K context, 128K max output, thinking mode, streaming, function calling, context caching, structured output, and MCP integration.
+- GLM-5.3 is text-only; GLM-5.3-Flash/FlashX are multimodal. All advertise 1M context and 128K maximum output, forced reasoning, streaming, function calling, context caching and structured output. Pi's actual input capabilities and configured context limits still govern the session.
+- GLM-5.3 and Flash are available on the Coding Plan; FlashX is not currently available on that plan.
+- All four MCP services require a compatible **GLM Coding Plan**, not merely an API key. Current credits-based plans charge 1.2 credits per search/reader/Zread call; vision uses Flash token multipliers. Legacy plan accounting can differ. See [usage policy](https://docs.z.ai/devpack/usage-policy) and [FAQ](https://docs.z.ai/devpack/faq).
 - Web Search MCP documents web search with query, domain filter, recency filter, content size, and location options. The current remote MCP tool is `web_search_prime`.
 - Web Reader MCP documents URL reading with timeout, cache, Markdown/text, image retention, GFM, image data URL, image summary, and link summary options. The current remote MCP tool is `webReader`.
 - Zread MCP documents `search_doc`, `read_file`, and `get_repo_structure` for public GitHub repository search, file reading, and structure inspection.
@@ -60,20 +62,54 @@ export Z_AI_API_KEY="your_z_ai_api_key"
 pi -e .
 ```
 
+## GLM-5.3 quality setup
+
+Use the [official Z.AI Pi setup](https://docs.z.ai/devpack/tool/pi): authenticate with `/login` → ZAI or `ZAI_API_KEY`, then select `/model` → `zai/glm-5.3` for complex software engineering or `zai/glm-5.3-flash` for native image input and a lower-cost coding loop.
+
+```bash
+pi --model zai/glm-5.3 --thinking max
+# Native image-capable coding model:
+pi --model zai/glm-5.3-flash --thinking max
+```
+
+- **Reasoning:** Z.AI recommends `max` for coding; `high` and `low` trade depth for latency. GLM-5.3 cannot disable thinking. Do not send `thinking.type: disabled`, `none`, or unsupported effort values to the standard API. Pi's current catalog maps supported levels to `low`/`high`/`max`.
+- **Sampling:** vendor defaults/recommendations are `temperature: 1` and `top_p: 0.95`. There is no need to force near-zero temperature for code. Tune one parameter at a time. If overriding native Pi sampling, use model-specific `samplingParams` in `models.json`, not a global request hook.
+- **Continuity:** Pi's Z.AI Chat Completions adapter enables `thinking.clear_thinking: false`, preserves native reasoning content in tool follow-ups and enables `tool_stream` for declared tools. Do not strip or rewrite reasoning history in another extension: Z.AI requires the original sequence for reasoning continuity and caching. Cache hits are automatic/best-effort, not guaranteed.
+- **Endpoints:** the built-in global `zai` provider uses `https://api.z.ai/api/coding/paas/v4`. Pay-as-you-go Chat Completions use `https://api.z.ai/api/paas/v4`; configure that separately only when intended. Do not accidentally switch a Coding Plan to a billed standard endpoint. MCP URLs are separate and unchanged by model endpoint overrides.
+- **Context/output:** let Pi's current catalog describe the provider limits, while retaining intentional local context caps. Reasoning and the final answer share the output allowance; tiny token budgets can leave no answer. A 128K ceiling is not a request to generate 128K on every turn.
+- **Evidence:** use search to find sources, reader for full pages, Zread for public repositories, and vision for screenshot-grounded verification. Prefer local files for the current project. Read saved full outputs when truncation hides relevant evidence, cite source URLs, and treat retrieved instructions as untrusted data.
+
+For per-model startup reasoning without changing other providers, merge this into personal `settings.json` on hosts supporting `modelThinkingLevels` (or use the CLI flags above):
+
+```json
+{
+  "modelThinkingLevels": {
+    "zai/glm-5.3": "max",
+    "zai/glm-5.3-flash": "max",
+    "zai/glm-5.3-highspeed": "max"
+  }
+}
+```
+
+Keep all four package resources enabled for full capability; they connect lazily and do not make paid calls at startup. Run `/zai-mcp-status` after loading. `lazy_not_connected_until_first_use` is expected before a service's first call.
+
 ## Configure
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `Z_AI_API_KEY` / `ZAI_API_KEY` / `ZAI_CODING_CN_API_KEY` | Yes* | none | Z.ai API key used for HTTP MCP Bearer auth and the vision stdio server. Env vars take precedence over pi's stored provider key. |
 | `Z_AI_MCP_SERVERS` | No | `all` | Optional env-var allowlist for direct/legacy loading. Prefer `pi config` for normal package installs; each server is now a separate extension resource. |
-| `Z_AI_MCP_TIMEOUT_MS` | No | `180000` | Per-connection/tool-call timeout in milliseconds; vision and repository-search actions can take longer than ordinary search/read calls. |
+| `Z_AI_MCP_TIMEOUT_MS` | No | `300000` | Per-connection/tool-call timeout in milliseconds, aligned with the bundled vision HTTP deadline. Explicit overrides remain supported. |
 | `Z_AI_MODE` | No | `ZAI` | Passed through to the vision MCP server; Z.AI docs list `ZAI` as the supported value. |
 | `Z_AI_VISION_MODEL` | No | `glm-5.3-flash` | Optional user override of the bundled vision server's model. |
 | `Z_AI_VISION_MODEL_MAX_TOKENS` | No | `131072` | Optional user override of the bundled vision server's maximum output tokens. |
+| `Z_AI_VISION_MODEL_TEMPERATURE` | No | `1` for Flash/FlashX | Vision sampling override; other models retain vendor defaults. |
+| `Z_AI_VISION_MODEL_TOP_P` | No | `0.95` for Flash/FlashX | Vision nucleus-sampling override; other models retain vendor defaults. |
+| `Z_AI_BASE_URL` | No | vendor global standard API | Vision-only vendor setting, honored only when platform mode does not select a built-in endpoint; recognized `ZAI`/Zhipu modes replace it. Does not configure Pi's agent model or HTTP MCP endpoints. |
 
 \* If env vars are unset, the extension asks the current Pi model registry to resolve the first available Z.ai provider API key. Pi owns its selected agent directory, stored credentials, templates, command resolution and caching. It checks `zai` (global), then `zai-coding-cn` (China), then configured catalog aliases whose `baseUrl` points at a Z.ai / Zhipu (BigModel) endpoint. Header-only model authentication does not replace this external service's required bearer API key. Run `/login` in pi and choose a ZAI provider to store this key.
 
-The bundled vision server's 0.1.5 update adopts upstream defaults: the model changes from `glm-4.6v` to `glm-5.3-flash`, and the output limit rises from 32,768 to 131,072 tokens. This package does not pin the old model or cap. The higher output ceiling can increase per-call cost; actual charges depend on service pricing and generated output. Offline startup, tool listing and intercepted-child checks pass, but live model availability and cost have not been verified.
+The bundled vision server uses `glm-5.3-flash` with a 131,072-token output ceiling and enabled thinking (default `max` effort upstream). `PLATFORM_MODE` takes precedence over `Z_AI_MODE`; recognized modes select the vendor's standard API endpoint even when `Z_AI_BASE_URL` is set. Custom-mode base URLs gain a trailing slash before the vendor appends `chat/completions`. For `glm-5.3-flash` and `glm-5.3-flashx` the extension corrects the vendor package's older `0.8`/`0.6` sampling defaults to Z.AI's recommended `1`/`0.95`, preserving explicit user overrides and legacy-model settings. The higher output ceiling can increase per-call cost; actual charges depend on service pricing and generated output. Vision MCP is a separate single-turn analysis, not Pi's native image conversation or streaming provider.
 
 Example: disable vision server access for a lighter setup: run `pi config`, open package resources for `pi-zai-mcp`, and disable `extensions/zai-mcp-vision.ts`.
 
@@ -96,7 +132,7 @@ Arguments:
 - `query` — required search query. Z.AI recommends keeping it under about 70 characters.
 - `domain_filter` — optional whitelist domain such as `docs.z.ai` or `github.com`.
 - `recency_filter` — optional `oneDay`, `oneWeek`, `oneMonth`, `oneYear`, or `noLimit`.
-- `content_size` — optional `medium` or `high`; defaults to `high` for more context, specify `medium` to reduce quota use.
+- `content_size` — optional `medium` or `high`; defaults to `high` for more context, specify `medium` for shorter summaries. This does not imply lower per-call MCP credits.
 - `location` — optional `cn` or `us` region hint.
 
 ### `z_ai_reader`
@@ -194,11 +230,13 @@ Failed/unpublished candidates can retry daily at 12:17 UTC or via manual dispatc
 
 ## Verify this repo
 
-Historical qualification results and remaining live checks are recorded in [Pi 1.0 qualification](PI_1_0_QUALIFICATION.md); they do not certify a new host. For current qualification, use the shared qualifier with `--host official --target latest` and separately with the packed latest fork revision, selecting each consistent host graph before `npm run check:compat`. Plain `npm ci --ignore-scripts` installs only the locked development snapshot. The contract runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, loopback MCP search and private large-output checks, connected-session termination on reload, shutdown cleanup, and dry-run packing. It also starts the real bundled vision child with intercepted fetch and denied network to verify credential scoping and placeholder rejection. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
+Dated host qualification and live-service results are recorded in [Pi 1.0 qualification](PI_1_0_QUALIFICATION.md); they do not certify a new host or guarantee future service availability. For current qualification, use the shared qualifier with `--host official --target latest` and separately with the packed latest fork revision, selecting each consistent host graph before `npm run check:compat`. Plain `npm ci --ignore-scripts` installs only the locked development snapshot. The contract runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, loopback MCP search and private large-output checks, connected-session termination on reload, shutdown cleanup, and dry-run packing. It also starts the real bundled vision child with intercepted fetch and denied network to verify credential scoping and placeholder rejection. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
 
 ```bash
 npm install
+npm run lint
 npm run ci
+npm run check:compat
 npm publish --dry-run
 ```
 
@@ -210,20 +248,35 @@ cd "$tmpdir"
 pi install -l /path/to/pi-zai-mcp
 ```
 
+## Code quality
+
+`oxlint.config.ts` uses type-aware linting and TypeScript diagnostics, with correctness, suspicious and performance categories blocking. It bans unsafe TypeScript, floating/misused promises, dishonest assertions, unfinished-work comments and inline lint suppressions. CI runs the same zero-warning policy; `lint` is no longer an alias for typechecking.
+
+Production ceilings are complexity 10, depth 3, four parameters, 40 statements/function, 80 lines/function and 500 lines/file (excluding blank lines/comments). The small native Pi adapter has a documented five-parameter allowance because the SDK owns that callback signature. Any other interoperability or owned-resource exceptions are narrowly documented in configuration. Pedantic/style/restriction categories are not enabled wholesale.
+
+```bash
+npm run lint:fix    # Apply safe fixes; repair remaining findings
+npm run lint:agent  # Blocking checks with agent-oriented diagnostics
+```
+
 ## Current limits
 
-- Requires a Z.ai API key and network access for real tool calls.
+- Requires a Z.ai API key, compatible Coding Plan entitlement and network access for real tool calls. Zread can reject public repositories that are not indexed upstream.
 - The pi-facing API is curated. If upstream MCP schemas or tool names change, update this extension and docs intentionally.
-- Verification consists of TypeScript typechecking, a lightweight extension contract smoke script, npm audit, npm dry-run packing, and isolated pi entrypoint loads; there is no broad mocked MCP integration suite yet.
+- Verification includes strict Oxlint, TypeScript, focused contract smokes, native loopback HTTP and real offline vision-child execution, npm audit, packing, and independent official/fork host qualification. Offline checks do not certify service availability, subscription entitlement, live pricing, or every real network/cancellation phase.
 
 ## Project map
 
 ```text
 extensions/zai-mcp-*.ts  # per-server pi package entrypoints plus status command
 extensions/zai-mcp.ts    # legacy all-in-one entrypoint for direct local loading
-src/index.ts             # shared extension implementation
+src/index.ts             # shared MCP schemas, connections, authentication and execution
+src/register-tool.ts     # typed native Pi tool adapter
+src/tools.ts             # argument projection and bounded result rendering
+src/output.ts            # private saved outputs and bounded MCP text
 src/runtime-state.ts     # shared state for split entrypoints loaded as separate modules
 src/servers.ts           # canonical MCP server definitions and legacy env allowlist
+oxlint.config.ts         # strict type-aware lint policy
 package.json             # npm + pi package manifest
 CHANGELOG.md             # release notes
 ```

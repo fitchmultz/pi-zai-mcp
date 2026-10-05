@@ -1,12 +1,13 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 
 const EXTENSION_NAME = "pi-zai-mcp";
 const VISION_MCP_PACKAGE = "@z_ai/mcp-server";
 const VISION_MCP_BIN = "zai-mcp-server";
+const GLM_VISION_DEFAULT_MODELS: ReadonlySet<string> = new Set(["glm-5.3-flash", "glm-5.3-flashx"]);
 const require = createRequire(import.meta.url);
 
 export type ServerId = "search" | "reader" | "zread" | "vision";
@@ -14,15 +15,15 @@ type ServerKind = "http" | "stdio";
 
 export const ALL_SERVER_IDS = ["search", "reader", "zread", "vision"] as const satisfies readonly ServerId[];
 
-type ServerConfig = {
+type ServerConfig = Readonly<{
   id: ServerId;
   label: string;
   kind: ServerKind;
   url?: string;
   command?: string;
   args?: string[];
-  env?: Record<string, string>;
-};
+  env?: Readonly<Record<string, string>>;
+}>;
 
 export type ManagedServer = ServerConfig & {
   client?: Client;
@@ -37,17 +38,17 @@ export type ManagedServer = ServerConfig & {
 
 function enabledServerIds(): Set<ServerId> | undefined {
   const raw = process.env.Z_AI_MCP_SERVERS;
-  if (!raw || raw.trim().length === 0 || raw.trim().toLowerCase() === "all") return undefined;
+  if (raw === undefined || raw.trim().length === 0 || raw.trim().toLowerCase() === "all") {return undefined;}
 
-  const known = new Set<ServerId>(ALL_SERVER_IDS);
   const enabled = new Set<ServerId>();
   const unknown: string[] = [];
 
   for (const value of raw.split(",")) {
     const id = value.trim().toLowerCase();
-    if (!id) continue;
-    if (known.has(id as ServerId)) {
-      enabled.add(id as ServerId);
+    if (id.length === 0) {continue;}
+    const knownId = ALL_SERVER_IDS.find((candidate) => candidate === id);
+    if (knownId !== undefined) {
+      enabled.add(knownId);
     } else {
       unknown.push(id);
     }
@@ -70,7 +71,15 @@ function visionEnvironment(): Record<string, string> {
     "Z_AI_TIMEOUT", "Z_AI_RETRY_COUNT", "SERVER_NAME", "SERVER_VERSION", "ZAI_MCP_LOG_PATH",
   ]) {
     const value = process.env[key];
-    if (value !== undefined) env[key] = value;
+    if (value !== undefined) {env[key] = value;}
+  }
+  if (env.Z_AI_BASE_URL !== undefined && env.Z_AI_BASE_URL.length > 0) {
+    env.Z_AI_BASE_URL = `${env.Z_AI_BASE_URL.replace(/\/+$/, "")}/`;
+  }
+  const model = env.Z_AI_VISION_MODEL ?? "";
+  if (model === "" || GLM_VISION_DEFAULT_MODELS.has(model)) {
+    env.Z_AI_VISION_MODEL_TEMPERATURE ??= "1";
+    env.Z_AI_VISION_MODEL_TOP_P ??= "0.95";
   }
   return env;
 }
@@ -78,10 +87,19 @@ function visionEnvironment(): Record<string, string> {
 function resolveVisionServerCommand(): { command: string; args: string[] } {
   const packageJsonPath = require.resolve(`${VISION_MCP_PACKAGE}/package.json`);
   const packageRoot = dirname(packageJsonPath);
-  const packageJson = require(packageJsonPath) as { bin?: string | Record<string, string> };
-  const binPath = typeof packageJson.bin === "string" ? packageJson.bin : packageJson.bin?.[VISION_MCP_BIN];
+  const packageJson: unknown = require(packageJsonPath);
+  if (packageJson === null || typeof packageJson !== "object" || !("bin" in packageJson)) {
+    throw new Error(`${VISION_MCP_PACKAGE} does not declare its binary.`);
+  }
+  const bin = packageJson.bin;
+  let binPath: unknown;
+  if (typeof bin === "string") {
+    binPath = bin;
+  } else if (bin !== null && typeof bin === "object" && VISION_MCP_BIN in bin) {
+    binPath = bin[VISION_MCP_BIN];
+  }
 
-  if (!binPath) throw new Error(`${VISION_MCP_PACKAGE} does not declare the ${VISION_MCP_BIN} binary.`);
+  if (typeof binPath !== "string" || binPath.length === 0) {throw new Error(`${VISION_MCP_PACKAGE} does not declare the ${VISION_MCP_BIN} binary.`);}
 
   return {
     command: process.execPath,
@@ -118,7 +136,7 @@ const SERVER_FACTORIES = {
       args: visionCommand.args,
       env: {
         ...visionEnvironment(),
-        Z_AI_MODE: process.env.Z_AI_MODE || "ZAI",
+        Z_AI_MODE: process.env.Z_AI_MODE === undefined || process.env.Z_AI_MODE.length === 0 ? "ZAI" : process.env.Z_AI_MODE,
       },
     };
   },
@@ -130,5 +148,5 @@ export function createServers(serverIds: readonly ServerId[] = ALL_SERVER_IDS): 
 
 export function legacyServerIds(): readonly ServerId[] {
   const enabled = enabledServerIds();
-  return enabled ? ALL_SERVER_IDS.filter((id) => enabled.has(id)) : ALL_SERVER_IDS;
+  return enabled !== undefined ? ALL_SERVER_IDS.filter((id) => enabled.has(id)) : ALL_SERVER_IDS;
 }
