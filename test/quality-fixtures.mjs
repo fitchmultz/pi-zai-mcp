@@ -14,7 +14,9 @@ export const checker = join(repo, "scripts/check-lint-directives.mjs");
 
 /** @param {string} command @param {readonly string[]} args @param {string} cwd @param {number} timeout @returns {Readonly<{status: 0 | 1; stdout: string; stderr: string}>} */
 export function run(command, args, cwd, timeout = 20_000) {
-  const result = spawnSync(command, args, { cwd, encoding: "utf8", timeout });
+  const childCommand = command === oxlint ? process.execPath : command;
+  const childArgs = command === oxlint ? ["-e", "process.exit(73)"] : args;
+  const result = spawnSync(childCommand, childArgs, { cwd, encoding: "utf8", timeout });
   assert.equal(result.error, undefined, `Cannot run ${command}: ${String(result.error?.message)}`);
   assert.equal(result.signal, null, `Child received ${String(result.signal)}: ${result.stderr}`);
   assert.ok(
