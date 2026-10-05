@@ -8,6 +8,8 @@ All notable changes to this project are documented here.
 - Enable independent strict checked-JavaScript/TypeScript return-path analysis; preserve explicit native and exported contracts with declaration-qualified allowances.
 - Keep cohesive tests exempt from size/statement limits while retaining branching/parameter limits. Permit only explained, reproduced callback/lifecycle/validator exceptions; keep unsafe types, floating promises and nearby checks blocking.
 - Add real-CLI configuration regressions with precise diagnostics and fail-closed child handling, deterministic paused lifecycle guards, control-validator inputs and preserved checker limitations.
+- Preserve all-checked JavaScript coverage with effective-scope and language-boundary regressions; verify semantic lint and compiler diagnostics independently.
+- Reject multiline disable-comment rule smuggling and compiler-recognized suppression suffixes in the comment-aware policy gate.
 - Separate cohesive curated schemas/metadata from MCP lifecycle ownership, restore native runtime equality assertions and remove redundant callback annotations without changing service behavior.
 - Keep npm-owned lockfile formatting, native asynchronous ordering/cancellation, environment isolation, argument-presence semantics and all four curated tools intact.
 

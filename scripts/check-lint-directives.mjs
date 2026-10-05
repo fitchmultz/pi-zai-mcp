@@ -4,7 +4,7 @@ import { parseSync } from "oxc-parser";
 
 const sourceExtension = /\.(?:[cm]?[jt]sx?)$/;
 const lintDirective = /^(?:oxlint|eslint)-(?:disable|enable)\b|^(?:oxlint|eslint)\s+\S/;
-const typeDirective = /^@ts-(?:ignore|nocheck|expect-error)\b/;
+const typeDirective = /^@ts-(?:ignore|nocheck|expect-error)/;
 const approvedDisable =
   /^oxlint-disable-next-line\s+(no-await-in-loop|vitest\/no-conditional-expect|typescript\/prefer-readonly-parameter-types|typescript\/no-unnecessary-condition|no-control-regex)(?:\s+--\s+(.+))?$/;
 const testFile = /(?:\.test\.[cm]?[jt]sx?$|\.spec\.[cm]?[jt]sx?$|(?:^|[/\\])__tests__[/\\])/;
@@ -70,7 +70,7 @@ function typeViolation(path, directive) {
   const description = directive.replace(/^@ts-expect-error\b\s*:?\s*/, "");
   if (
     path.endsWith(".test-d.ts") &&
-    directive.startsWith("@ts-expect-error") &&
+    /^@ts-expect-error(?:\s|:|$)/.test(directive) &&
     description.trim().length >= 10
   ) {
     return;
@@ -116,7 +116,10 @@ async function checkFile(path) {
     const reason = adjacentReason(source, parsed.comments[index - 1], comment.start);
     const line = source.slice(0, comment.start).split("\n").length;
     for (const [offset, directive] of commentLines(comment.value).entries()) {
-      const problem = violation(path, directive, reason);
+      const problem =
+        /[\r\n]/.test(comment.value) && lintDirective.test(directive)
+          ? "Lint directives must use a single-line comment; continuation lines can hide extra rules."
+          : violation(path, directive, reason);
       if (problem !== undefined) {
         findings.push(`${path}:${line + offset}: ${problem}`);
       }

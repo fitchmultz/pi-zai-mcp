@@ -16,12 +16,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": [
-    "src/**/*.ts",
-    "extensions/**/*.ts",
-    "scripts/**/*.mjs",
-    "test/**/*.ts",
-    "test/**/*.mjs",
-    "oxlint.config.ts"
-  ]
+  "include": ["src/**/*", "extensions/**/*", "scripts/**/*", "test/**/*", "oxlint.config.ts"]
 }
