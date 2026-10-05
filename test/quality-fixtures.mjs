@@ -9,7 +9,7 @@ export const repo = fileURLToPath(new URL("../", import.meta.url));
 export const oxlint = join(repo, "node_modules/.bin/oxlint");
 export const checker = join(repo, "scripts/check-lint-directives.mjs");
 
-/** @typedef {Readonly<{code: string; filename: string; line: number; column: number}>} Finding */
+/** @typedef {Readonly<{code: string | undefined; message?: string; filename: string; line: number; column: number}>} Finding */
 /** @typedef {Readonly<{name: string; file: string; source: string; expected: readonly Finding[]; declarations?: Readonly<Record<string, string>>}>} Probe */
 
 /** @param {string} command @param {readonly string[]} args @param {string} cwd @param {number} timeout @returns {Readonly<{status: 0 | 1; stdout: string; stderr: string}>} */
@@ -34,8 +34,10 @@ function diagnostic(value, root) {
   assert.ok(isRecord(value), "Diagnostic must be an object");
   assert.equal(value.severity, "error", "Warnings are not approved negative results");
   assert.ok(
-    typeof value.code === "string",
-    "Parser/config/unused-directive diagnostics are not rule findings",
+    typeof value.code === "string" ||
+      (value.code === undefined &&
+        value.message === "Unused oxlint-disable directive (no problems were reported)."),
+    "Parser/config/unexpected uncoded diagnostics are not approved findings",
   );
   assert.ok(typeof value.filename === "string");
   assert.ok(Array.isArray(value.labels));
@@ -46,6 +48,9 @@ function diagnostic(value, root) {
   assert.ok(typeof label.span.column === "number");
   return {
     code: value.code,
+    ...(value.code === undefined
+      ? { message: "Unused oxlint-disable directive (no problems were reported)." }
+      : {}),
     filename: resolve(root, value.filename),
     line: label.span.line,
     column: label.span.column,

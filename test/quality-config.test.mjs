@@ -403,17 +403,197 @@ await test("case", () => { if (value) { assert.equal(value, true); } });`,
   );
 });
 
-/** @param {string} metric @param {number} limit @returns {string} */
-function metricSource(metric, limit) {
+const genericCallbackSource = `export function invoke<T>(
+  // This plain callable exposes no mutable properties; T describes its result.
+  // oxlint-disable-next-line typescript/prefer-readonly-parameter-types
+  operation: () => T,
+): T {
+  return operation();
+}`;
+
+const liveGuardSource = `export async function proceedWhenActive(signal: AbortSignal, pause: Promise<void>, followOn: () => void): Promise<void> {
+  if (signal.aborted) { return; }
+  await pause;
+  // The cancellation owner may abort this live signal while the operation is paused.
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  if (signal.aborted) { return; }
+  followOn();
+}
+export async function proceedWhenPresent(state: Readonly<{ deleted: boolean }>, pause: Promise<void>, followOn: () => void): Promise<void> {
+  if (state.deleted) { return; }
+  await pause;
+  // The state owner may delete this live record while the operation is paused.
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  if (state.deleted) { return; }
+  followOn();
+}`;
+
+const controlValidatorSource = String.raw`export function containsAsciiControl(value: string): boolean {
+  // This single-line field rejects ASCII C0 controls and DEL, including tabs and line breaks.
+  // oxlint-disable-next-line no-control-regex
+  return /[\u0000-\u001F\u007F]/u.test(value);
+}`;
+
+await test("quality config: narrowly explained checker and validator exceptions", async (t) => {
+  const callbackWithoutException = genericCallbackSource.replace(
+    "// oxlint-disable-next-line typescript/prefer-readonly-parameter-types",
+    "",
+  );
+  const entries = [
+    probe(
+      "plain generic callback passes without suppression in the installed checker",
+      callbackWithoutException,
+    ),
+    probe("unreproduced generic callback exception is rejected as unused", genericCallbackSource, [
+      {
+        code: undefined,
+        message: "Unused oxlint-disable directive (no problems were reported).",
+        filename: "src/probe.ts",
+        line: 3,
+        column: 3,
+      },
+    ]),
+    probe(
+      "mutable callback attached properties remain detectable",
+      callbackWithoutException.replace("() => T,", "(() => T) & { state: number },"),
+      [finding(readonlyRule, 4, 3)],
+    ),
+    probe(
+      "other mutable inputs remain protected beside plain callable",
+      callbackWithoutException
+        .replace("  operation: () => T,", "  operation: () => T,\n  state: { value: string },")
+        .replace("  return operation();", "  console.log(state);\n  return operation();"),
+      [finding(readonlyRule, 5, 3)],
+    ),
+    probe(
+      "unsafe body stays protected beside plain callable",
+      callbackWithoutException.replace(
+        "  return operation();",
+        '  const value = JSON.parse("{}");\n  console.log(value.label);\n  return operation();',
+      ),
+      [
+        finding("typescript(no-unsafe-assignment)", 6, 17),
+        finding("typescript(no-unsafe-member-access)", 7, 21),
+      ],
+    ),
+    probe(
+      "live post-await cancellation and deletion guard defect without suppression",
+      liveGuardSource.replaceAll(
+        "// oxlint-disable-next-line typescript/no-unnecessary-condition",
+        "",
+      ),
+      [
+        finding("typescript(no-unnecessary-condition)", 6, 7),
+        finding("typescript(no-unnecessary-condition)", 14, 7),
+      ],
+    ),
+    probe("live post-await guards with exact explained exceptions", liveGuardSource),
+    probe(
+      "genuine nearby constant condition remains detectable",
+      liveGuardSource.replace("  followOn();", "  if (signal.aborted) { return; }\n  followOn();"),
+      [finding("typescript(no-unnecessary-condition)", 7, 7)],
+    ),
+    probe("visibly escaped validator with exact exception", controlValidatorSource),
+    probe(
+      "unexcepted nearby control regex remains detectable",
+      `${controlValidatorSource}\nexport const accidental = /\\u0000/u;`,
+      [finding("eslint(no-control-regex)", 6, 28)],
+    ),
+  ];
+  await Promise.all(
+    entries.map((entry) =>
+      t.test(entry.name, async (child) => {
+        await lintProbe(child, entry);
+      }),
+    ),
+  );
+});
+
+await test("live guard fixture: pause, interrupt and resume without protocol claims", async (t) => {
+  const root = await project(t, "src/guards.ts", `${liveGuardSource}\n`);
+  const driver = `import assert from "node:assert/strict";
+import { proceedWhenActive, proceedWhenPresent } from "./src/guards.ts";
+for (const interrupt of [false, true]) {
+  const pause = Promise.withResolvers();
+  const controller = new AbortController();
+  let followed = 0;
+  const pending = proceedWhenActive(controller.signal, pause.promise, () => { followed += 1; });
+  assert.equal(followed, 0, "follow-on work waits for the paused operation");
+  if (interrupt) { controller.abort(); }
+  pause.resolve();
+  await pending;
+  assert.equal(followed, interrupt ? 0 : 1, "live cancellation is reread after await");
+}
+for (const interrupt of [false, true]) {
+  const pause = Promise.withResolvers();
+  const state = { deleted: false };
+  let followed = 0;
+  const pending = proceedWhenPresent(state, pause.promise, () => { followed += 1; });
+  assert.equal(followed, 0, "follow-on work waits for the paused operation");
+  if (interrupt) { state.deleted = true; }
+  pause.resolve();
+  await pending;
+  assert.equal(followed, interrupt ? 0 : 1, "live deletion is reread after await");
+}
+console.log("live guard paths verified");`;
+  const result = run(
+    process.execPath,
+    ["--experimental-strip-types", "--input-type=module", "-e", driver],
+    root,
+  );
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout, "live guard paths verified\n");
+});
+
+await test("control validator fixture: rejected C0/DEL and accepted printable/Unicode inputs", async (t) => {
+  const root = await project(t, "src/validator.ts", `${controlValidatorSource}\n`);
+  const driver = String.raw`import assert from "node:assert/strict";
+import { containsAsciiControl } from "./src/validator.ts";
+for (const value of ["", "ordinary text", "café🙂", "\u0020", "\u007e", "\u0080"]) {
+  assert.equal(containsAsciiControl(value), false, "legitimate text remains accepted");
+}
+for (const value of ["\u0000", "\r", "\n", "\t", "\u001f", "\u007f"]) {
+  assert.equal(containsAsciiControl(value), true, "prohibited boundary character is detected");
+  assert.equal(containsAsciiControl("before" + value + "after"), true, "embedded control is detected");
+}
+console.log("control validator inputs verified");`;
+  const result = run(
+    process.execPath,
+    ["--experimental-strip-types", "--input-type=module", "-e", driver],
+    root,
+  );
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout, "control validator inputs verified\n");
+});
+
+/** @param {string} parameters @param {string} body @param {string | undefined} jsdoc @returns {string} */
+function workSource(parameters, body, jsdoc) {
+  const prefix = jsdoc === undefined ? "" : `/** ${jsdoc} @returns {void} */\n`;
+  const returns = jsdoc === undefined ? ": void" : "";
+  return `${prefix}export function work(${parameters})${returns} {\n${body}}`;
+}
+
+/** @param {string} metric @param {number} limit @param {boolean} javascript @returns {string} */
+function metricSource(metric, limit, javascript = false) {
   if (metric === "max-params") {
     const names = Array.from({ length: limit }, (_, index) => `arg${index}`);
-    return `export function work(${names.map((name) => `${name}: boolean`).join(", ")}): void { console.log(${names.join(", ")}); }`;
+    const parameters = names.map((name) => (javascript ? name : `${name}: boolean`)).join(", ");
+    const jsdoc = javascript
+      ? names.map((name) => `@param {boolean} ${name}`).join(" ")
+      : undefined;
+    return workSource(parameters, `  console.log(${names.join(", ")});\n`, jsdoc);
   }
   if (metric === "max-statements") {
-    return `export function work(): void {\n${'  console.log("work");\n'.repeat(limit)}}`;
+    return workSource("", '  console.log("work");\n'.repeat(limit), javascript ? "" : undefined);
   }
   if (metric === "max-lines-per-function") {
-    return `export function work(): void {\n  console.log(\n${'    "work",\n'.repeat(limit - 4)}  );\n}`;
+    return workSource(
+      "",
+      `  console.log(\n${'    "work",\n'.repeat(limit - 4)}  );\n`,
+      javascript ? "" : undefined,
+    );
   }
   if (metric === "max-lines") {
     return 'console.log("work");\n'.repeat(limit);
@@ -423,9 +603,17 @@ function metricSource(metric, limit) {
     const branches = Array.from({ length: limit }, (_, index) => `  if (flags[${index}]) {\n`).join(
       "",
     );
-    return `export function work(flags: readonly [${types}]): void {\n${branches}    console.log("work");\n${"  }\n".repeat(limit)}}`;
+    return workSource(
+      javascript ? "flags" : `flags: readonly [${types}]`,
+      `${branches}    console.log("work");\n${"  }\n".repeat(limit)}`,
+      javascript ? `@param {readonly [${types}]} flags` : undefined,
+    );
   }
-  return `export function work(flag: boolean): void {\n${'  if (flag) { console.log("work"); }\n'.repeat(limit - 1)}}`;
+  return workSource(
+    javascript ? "flag" : "flag: boolean",
+    '  if (flag) { console.log("work"); }\n'.repeat(limit - 1),
+    javascript ? "@param {boolean} flag" : undefined,
+  );
 }
 
 await test("quality config: exact production and test complexity ceilings", async (t) => {
@@ -433,25 +621,51 @@ await test("quality config: exact production and test complexity ceilings", asyn
     { name: "complexity", production: 10, tests: 15, line: 1, column: 8 },
     { name: "max-depth", production: 3, tests: 4, line: 5, column: 3 },
     { name: "max-params", production: 4, tests: 6, line: 1, column: 21 },
-    { name: "max-statements", production: 40, tests: 80, line: 1, column: 8 },
-    { name: "max-lines-per-function", production: 80, tests: 160, line: 1, column: 8 },
-    { name: "max-lines", production: 500, tests: 1000, line: 501, column: 1 },
+    { name: "max-statements", production: 40, tests: null, line: 1, column: 8 },
+    { name: "max-lines-per-function", production: 80, tests: null, line: 1, column: 8 },
+    { name: "max-lines", production: 500, tests: null, line: 501, column: 1 },
   ];
   await Promise.all(
     metrics.flatMap((metric) =>
-      ["production", "tests"].map(async (scope) => {
-        const file = scope === "production" ? "src/probe.ts" : "test/probe.test.ts";
-        const limit = scope === "production" ? metric.production : metric.tests;
-        await t.test(`${scope} ${metric.name} at limit`, async (child) => {
-          await lintProbe(child, probe("at limit", metricSource(metric.name, limit), [], file));
+      [
+        "src/probe.ts",
+        "test/probe.test.ts",
+        "test/quality-fixtures.mjs",
+        "test/contracts.test-d.ts",
+      ].map(async (file) => {
+        const production = file === "src/probe.ts";
+        const javascript = file.endsWith(".mjs");
+        if (!production && metric.tests === null) {
+          await t.test(`${file} ${metric.name} is disabled`, async (child) => {
+            await lintProbe(
+              child,
+              probe(
+                "cohesive large test",
+                metricSource(metric.name, metric.production * 3, javascript),
+                [],
+                file,
+              ),
+            );
+          });
+          return;
+        }
+        const limit = production ? metric.production : (metric.tests ?? 0);
+        await t.test(`${file} ${metric.name} at limit`, async (child) => {
+          await lintProbe(
+            child,
+            probe("at limit", metricSource(metric.name, limit, javascript), [], file),
+          );
         });
-        await t.test(`${scope} ${metric.name} over limit`, async (child) => {
-          const line = ["max-depth", "max-lines"].includes(metric.name) ? limit + 2 : metric.line;
+        await t.test(`${file} ${metric.name} over limit`, async (child) => {
+          const primaryLine = ["max-depth", "max-lines"].includes(metric.name)
+            ? limit + 2
+            : metric.line;
+          const line = javascript ? primaryLine + 1 : primaryLine;
           await lintProbe(
             child,
             probe(
               "over limit",
-              metricSource(metric.name, limit + 1),
+              metricSource(metric.name, limit + 1, javascript),
               [finding(`eslint(${metric.name})`, line, metric.column, file)],
               file,
             ),
@@ -479,12 +693,12 @@ export const pattern = /oxlint-disable/;
   assert.equal(result.stderr, "");
 });
 
-const policyReason =
-  "Only single-site no-await-in-loop or vitest/no-conditional-expect exceptions with a specific adjacent reason are approved.";
+const policyReason = /Only documented single-site .*exceptions are approved\./;
 const typeReason =
-  "Compiler suppressions require a described @ts-expect-error in a dedicated *.test-d.ts type test.";
+  /Compiler suppressions require a described @ts-expect-error.*dedicated \*\.test-d\.ts type test\./;
 
 await test("comment policy: exact approved sites and forbidden suppression forms", async (t) => {
+  /** @type {readonly Readonly<{name: string; comment: string; file: string; reason: RegExp | ""; line?: number}>[]} */
   const entries = [
     {
       name: "adjacent sequential reason",
@@ -496,9 +710,85 @@ await test("comment policy: exact approved sites and forbidden suppression forms
     {
       name: "inline fail-closed reason",
       comment:
-        "// oxlint-disable-line vitest/no-conditional-expect -- The hard discriminator assertion makes skipped payload validation fail closed.",
+        "// oxlint-disable-next-line vitest/no-conditional-expect -- The hard discriminator assertion makes skipped payload validation fail closed.",
       file: "test/probe.test.ts",
       reason: "",
+    },
+    {
+      name: "generic callable structural approval",
+      comment:
+        "// oxlint-disable-next-line typescript/prefer-readonly-parameter-types -- This plain callable exposes no mutable properties; T describes its result.",
+      file: "src/probe.ts",
+      reason: "",
+    },
+    {
+      name: "live post-await guard structural approval",
+      comment:
+        "// oxlint-disable-next-line typescript/no-unnecessary-condition -- The cancellation owner may abort this live signal while persistence is paused.",
+      file: "src/probe.ts",
+      reason: "",
+    },
+    {
+      name: "intentional escaped validator structural approval",
+      comment:
+        "// oxlint-disable-next-line no-control-regex -- This field rejects ASCII C0 controls and DEL at its validation boundary.",
+      file: "src/probe.ts",
+      reason: "",
+    },
+    {
+      name: "same-line directive is not approved",
+      comment:
+        "// oxlint-disable-line no-await-in-loop -- Journal commits require the previous write to finish.",
+      file: "src/probe.ts",
+      reason: policyReason,
+    },
+    {
+      name: "conditional assertion rejected in production",
+      comment:
+        "// oxlint-disable-next-line vitest/no-conditional-expect -- The hard discriminator assertion makes payload validation fail closed.",
+      file: "src/probe.ts",
+      reason: policyReason,
+    },
+    {
+      name: "conditional assertion recognized in spec files",
+      comment:
+        "// oxlint-disable-next-line vitest/no-conditional-expect -- The hard discriminator assertion makes payload validation fail closed.",
+      file: "test/probe.spec.ts",
+      reason: "",
+    },
+    {
+      name: "conditional assertion recognized in __tests__",
+      comment:
+        "// oxlint-disable-next-line vitest/no-conditional-expect -- The hard discriminator assertion makes payload validation fail closed.",
+      file: "src/__tests__/probe.ts",
+      reason: "",
+    },
+    {
+      name: "conditional assertion recognized in exact smoke owner",
+      comment:
+        "// oxlint-disable-next-line vitest/no-conditional-expect -- The hard discriminator assertion makes payload validation fail closed.",
+      file: "scripts/smoke.mjs",
+      reason: "",
+    },
+    {
+      name: "conditional assertion recognized in exact offline fixture",
+      comment:
+        "// oxlint-disable-next-line vitest/no-conditional-expect -- The hard discriminator assertion makes payload validation fail closed.",
+      file: "test/fixtures/vision-offline.mjs",
+      reason: "",
+    },
+    {
+      name: "conditional assertion not globally allowed in test directory",
+      comment:
+        "// oxlint-disable-next-line vitest/no-conditional-expect -- The hard discriminator assertion makes payload validation fail closed.",
+      file: "test/arbitrary.mjs",
+      reason: policyReason,
+    },
+    {
+      name: "typed extension not a dedicated type-test scope",
+      comment: "// @ts-expect-error: This assignment must reject nonstring input.",
+      file: "test/contracts.test-d.mts",
+      reason: typeReason,
     },
     { name: "blanket", comment: "// oxlint-disable", file: "src/probe.ts", reason: policyReason },
     {
@@ -620,11 +910,17 @@ await test("comment policy: exact approved sites and forbidden suppression forms
         assert.equal(result.stdout, "");
         assert.equal(result.status, entry.reason === "" ? 0 : 1);
         const line = entry.line ?? entry.comment.split("\n").length;
-        const expected = entry.reason === "" ? "" : `${entry.file}:${line}: ${entry.reason}\n`;
-        assert.equal(
-          result.stderr,
-          expected,
-          "Exact policy finding, not unrelated parser/process failure",
+        if (entry.reason === "") {
+          assert.equal(result.stderr, "");
+          return;
+        }
+        const prefix = `${entry.file}:${line}: `;
+        assert.ok(result.stderr.startsWith(prefix), "Exact primary policy filename and line");
+        assert.equal(result.stderr.trimEnd().split("\n").length, 1, "Exactly one policy finding");
+        assert.match(
+          result.stderr.slice(prefix.length),
+          entry.reason,
+          "Policy category, not an unrelated parser/process failure",
         );
       }),
     ),
@@ -657,7 +953,7 @@ await test("negative-probe evaluator rejects unrelated compiler, module, parser 
     {
       name: "parser error",
       source: "const = ;",
-      error: /Parser\/config\/unused-directive diagnostics are not rule findings/,
+      error: /Parser\/config\/unexpected uncoded diagnostics are not approved findings/,
     },
   ];
   await Promise.all(
