@@ -16,7 +16,7 @@ net.connect = denyNetwork;
 net.createConnection = denyNetwork;
 net.Socket.prototype.connect = denyNetwork;
 syncBuiltinESMExports();
-/** @typedef {string | Readonly<Pick<Request, "url">> | Readonly<Pick<URL, "toString">>} FetchInput */
+/** @typedef {string | Request | URL} FetchInput */
 globalThis.fetch = /** @param {FetchInput} input */ (input, options) => {
   assert.ok(typeof options?.body === "string");
   const body = /** @type {unknown} */ (JSON.parse(options.body));

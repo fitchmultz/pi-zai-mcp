@@ -20,7 +20,7 @@ export type CuratedRequest = Readonly<{
   toolName: string;
   args: Readonly<Record<string, unknown>>;
   registry: Registry;
-  signal: Readonly<AbortSignal> | undefined;
+  signal: AbortSignal | undefined;
   onUpdate: ((result: ToolUpdate) => void) | undefined;
 }>;
 type ToolArgs<T extends TSchema> = Readonly<Parameters<NonNullable<ToolDefinition<T, CuratedDetails, unknown>["renderCall"]>>[0]>;
@@ -46,7 +46,7 @@ export function createRegistrar<T extends TSchema>(
       promptSnippet: config.promptSnippet, promptGuidelines: config.promptGuidelines === undefined ? undefined : [...config.promptGuidelines],
       parameters: config.parameters, outputSchema: OUTCOME_SCHEMA,
       renderCall: config.renderCall, renderResult: renderCuratedResult,
-      execute(_toolCallId, params, signal: Readonly<AbortSignal> | undefined, onUpdate, ctx: Readonly<{ modelRegistry: Registry }>) {
+      execute(_toolCallId, params, signal: AbortSignal | undefined, onUpdate, ctx: Readonly<{ modelRegistry: Registry }>) {
         return execute({ server: owner, toolName: config.toMcpToolName(params), args: config.toMcpArgs(params), registry: ctx.modelRegistry, signal,
           onUpdate: (result) => { onUpdate?.({ ...result, content: [...result.content] }); },
         });

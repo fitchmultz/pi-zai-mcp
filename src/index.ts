@@ -11,6 +11,7 @@ import { summarizeMcpResult, truncateForTool } from "./output.ts";
 import { createRequire } from "node:module";
 import { addActiveServers, getActiveServers, registerStatusCommand, resetGlobalStateForTests, warnOnceIfMissingApiKey } from "./runtime-state.ts";
 import { ALL_SERVER_IDS, createServers, legacyServerIds, type ManagedServer, type ServerId } from "./servers.ts";
+import { getApiKey, hasApiKeySource } from "./auth.ts";
 
 const EXTENSION_NAME = "pi-zai-mcp";
 const require = createRequire(import.meta.url);
@@ -144,45 +145,7 @@ function positiveIntegerFromEnv(name: string, fallback: number): number {
   return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 2_147_483_647 ? parsed : fallback;
 }
 
-const ZAI_PROVIDER_IDS = ["zai", "zai-coding-cn"] as const;
-const ZAI_HOSTS = ["z.ai", "bigmodel.cn"] as const;
 type SessionStartContext = Readonly<{ modelRegistry: Registry; hasUI: boolean; ui: Readonly<Pick<ExtensionContext["ui"], "notify">> }>;
-
-function isZaiBaseUrl(value: string): boolean {
-  try {
-    const host = new URL(value).hostname.toLowerCase();
-    return ZAI_HOSTS.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
-  } catch {
-    return false;
-  }
-}
-
-function zaiProviderCandidates(registry: Registry): string[] {
-  return [...new Set([...ZAI_PROVIDER_IDS, ...registry.getAll().filter((model: Readonly<{ baseUrl: string }>) => isZaiBaseUrl(model.baseUrl)).map((model: Readonly<{ provider: string }>) => model.provider)])];
-}
-
-function serviceKey(): string | undefined {
-  return [process.env.Z_AI_API_KEY, process.env.ZAI_API_KEY, process.env.ZAI_CODING_CN_API_KEY].find((key) => key !== undefined && key.length > 0);
-}
-
-function hasApiKeySource(registry: Registry): boolean {
-  return serviceKey() !== undefined || zaiProviderCandidates(registry).some(id => registry.getProviderAuthStatus(id).configured);
-}
-
-async function getApiKey(registry: Registry): Promise<string | undefined> {
-  const explicit = serviceKey();
-  if (explicit !== undefined) {return explicit;}
-  const candidates = zaiProviderCandidates(registry);
-  async function resolveCandidate(index: number): Promise<string | undefined> {
-    const id = candidates[index];
-    if (id === undefined) { return undefined; }
-    // Provider auth owns stored templates, commands, environment and refresh.
-    // The external MCP service still specifically needs a bearer API key.
-    const key = (await registry.getProviderAuth(id))?.auth.apiKey;
-    return key !== undefined && key.length > 0 ? key : resolveCandidate(index + 1);
-  }
-  return resolveCandidate(0);
-}
 
 function isMcpErrorResult(result: unknown): boolean {
   return isRecord(result) && result.isError === true;
@@ -195,7 +158,7 @@ type Connection = {
 
 async function connectWith(
   owner: ManagedServer,
-  signal: Readonly<AbortSignal> | undefined,
+  signal: AbortSignal | undefined,
   createConnection: () => Connection | Promise<Connection>,
 ): Promise<Client> {
   if (owner.closed === true) { throw new Error("Z.AI MCP connection owner has shut down."); }
@@ -233,7 +196,7 @@ async function connectWith(
   }
 }
 
-async function connect(owner: ManagedServer, registry: Registry, signal?: Readonly<AbortSignal>): Promise<Client> {
+async function connect(owner: ManagedServer, registry: Registry, signal?: AbortSignal): Promise<Client> {
   return connectWith(owner, signal, async () => {
     const apiKey = await getApiKey(registry);
     if (apiKey === undefined) {throw new Error("Missing Z.ai API key. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or run pi /login for the zai or zai-coding-cn provider.");}
@@ -266,11 +229,11 @@ function abortError(message: string): Error {
   return new Error(message);
 }
 
-function throwIfAborted(signal: Readonly<AbortSignal> | undefined, message: string): void {
+function throwIfAborted(signal: AbortSignal | undefined, message: string): void {
   if (signal?.aborted === true) {throw abortError(message);}
 }
 
-async function withAbort<T>(promise: Readonly<Promise<T>>, signal: Readonly<AbortSignal> | undefined, message: string): Promise<T> {
+async function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined, message: string): Promise<T> {
   if (signal === undefined) { return promise; }
   if (signal.aborted) {
     promise.catch(() => null);
@@ -283,7 +246,7 @@ async function withAbort<T>(promise: Readonly<Promise<T>>, signal: Readonly<Abor
   finally { signal.removeEventListener("abort", onAbort); }
 }
 
-async function runExclusive<T>(owner: ManagedServer, signal: Readonly<AbortSignal> | undefined, operation: () => Promise<T>): Promise<T> {
+async function runExclusive<T>(owner: ManagedServer, signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<T> {
   const previous = owner.callQueue ?? Promise.resolve();
   const run = previous.catch(() => null).then(() => {
     throwIfAborted(signal, "Tool call was cancelled before it started.");
@@ -445,7 +408,7 @@ const REGISTRARS = {
   }, executeCuratedTool),
 } satisfies Record<ServerId, (pi: ZaiExtensionAPI, server: ManagedServer) => void>;
 
-async function settleWithin(promise: Readonly<Promise<unknown>>, timeoutMs: number): Promise<void> {
+async function settleWithin(promise: Promise<unknown>, timeoutMs: number): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([
     promise.catch(() => null),

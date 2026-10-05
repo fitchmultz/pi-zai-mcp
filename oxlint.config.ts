@@ -1,7 +1,7 @@
 import { defineConfig } from "oxlint";
 
 export default defineConfig({
-  plugins: ["eslint", "typescript", "unicorn", "oxc", "import", "promise"],
+  plugins: ["eslint", "typescript", "unicorn", "oxc", "import", "promise", "vitest"],
   categories: {
     correctness: "error", suspicious: "error", perf: "error",
     pedantic: "off", style: "off", restriction: "off", nursery: "off",
@@ -31,10 +31,10 @@ export default defineConfig({
     "typescript/no-floating-promises": ["error", { checkThenables: true, ignoreIIFE: false, ignoreVoid: false }],
     "typescript/no-misused-promises": "error",
     "typescript/await-thenable": "error",
-    "typescript/require-await": "error",
+    "typescript/require-await": "off",
     "typescript/return-await": ["error", "error-handling-correctness-only"],
     "typescript/strict-void-return": "error",
-    "typescript/no-confusing-void-expression": "error",
+    "typescript/no-confusing-void-expression": ["error", { ignoreArrowShorthand: true }],
     "typescript/no-meaningless-void-operator": "error",
     "promise/always-return": "error",
     "promise/catch-or-return": "error",
@@ -43,7 +43,7 @@ export default defineConfig({
     "typescript/no-unnecessary-condition": ["error", { checkTypePredicates: true, allowConstantLoopConditions: "only-allowed-literals" }],
     "typescript/strict-boolean-expressions": ["error", {
       allowAny: false, allowNullableBoolean: false, allowNullableEnum: false,
-      allowNullableNumber: false, allowNullableObject: false, allowNullableString: false,
+      allowNullableNumber: false, allowNullableObject: true, allowNullableString: false,
       allowNumber: false, allowString: false,
     }],
     "typescript/restrict-plus-operands": ["error", {
@@ -64,10 +64,21 @@ export default defineConfig({
       allow: [
         // ponytail: connection owners deliberately mutate their SDK handles/queues; replace this exception if ownership moves to methods.
         { from: "file", path: "src/servers.ts", name: "ManagedServer" },
-
+        // Native handles retain declaration contracts; readonly borrowing cannot freeze their internal state.
+        { from: "package", package: "node", name: ["AbortSignal", "Request", "RequestInit", "URL", "IncomingMessage", "ServerResponse", "TestContext"] },
+        { from: "lib", name: "Promise" },
+        { from: "package", package: "@earendil-works/pi-coding-agent", name: "AgentSession" },
       ],
     }],
     "no-param-reassign": ["error", { props: true }],
+    "no-await-in-loop": "error",
+    "no-underscore-dangle": "off",
+    // ponytail: Oxlint 1.87 expect-expect ignores node:test/t.test; no-conditional-expect recognizes Vitest expect, not Node assert.*. Requalify when native support lands.
+    "vitest/expect-expect": ["error", {
+      assertFunctionNames: ["assert", "assert.*", "equal", "deepEqual", "verifySearch", "verifyPrivateOutput", "verifyVisionConfiguration", "verifyReload"],
+      additionalTestBlockFunctions: ["t.test"],
+    }],
+    "vitest/no-conditional-expect": "error",
     "typescript/no-empty-object-type": "error",
     "typescript/no-unsafe-function-type": "error",
     "typescript/no-wrapper-object-types": "error",
@@ -100,9 +111,27 @@ export default defineConfig({
     "import/no-mutable-exports": "error",
     "import/no-duplicates": ["error", { preferInline: true }],
     "typescript/consistent-type-imports": ["error", { prefer: "type-imports", fixStyle: "inline-type-imports", disallowTypeAnnotations: true }],
-    "unicorn/consistent-function-scoping": "error", "unicorn/no-useless-undefined": "error",
+    "unicorn/consistent-function-scoping": "off", "unicorn/no-useless-undefined": "error",
   },
   overrides: [
+    {
+      files: ["src/auth.ts"],
+      rules: {
+        // ponytail: native provider resolution can execute commands/refresh; stop at the first key instead of resolving concurrently.
+        "no-await-in-loop": "off",
+      },
+    },
+    {
+      files: ["test/native-runtime.test.mjs", "scripts/smoke.mjs", "test/fixtures/vision-offline.mjs"],
+      rules: {
+        // Fixture owners combine setup, execution and teardown; bound them without production's smaller orchestration ceilings.
+        complexity: ["error", { max: 15, variant: "modified" }],
+        "max-depth": ["error", { max: 4 }],
+        "max-statements": ["error", { max: 70 }],
+        "max-lines-per-function": ["error", { max: 150, skipBlankLines: true, skipComments: true, IIFEs: true }],
+        "max-lines": ["error", { max: 600, skipBlankLines: true, skipComments: true }],
+      },
+    },
     {
       files: ["src/index.ts"],
       rules: {
@@ -126,27 +155,8 @@ export default defineConfig({
     {
       files: ["test/native-runtime.test.mjs"],
       rules: {
-        "typescript/prefer-readonly-parameter-types": ["error", {
-          allow: [
-            // ponytail: the native test observes retired connection actors; remove this exception if owners expose immutable status handles.
-            { from: "file", path: "src/servers.ts", name: "ManagedServer" },
-            // ponytail: this fixture owns session reload/disposal; use a readonly session handle if Pi exports one.
-            { from: "package", package: "@earendil-works/pi-coding-agent", name: "AgentSession" },
-            // ponytail: fetch forwards native body/headers handles unchanged; use an immutable RequestInit when Node exports one.
-            { from: "package", package: "node", name: "RequestInit" },
-          ],
-        }],
-      },
-    },
-    {
-      files: ["test/fixtures/vision-offline.mjs"],
-      rules: {
-        "typescript/prefer-readonly-parameter-types": ["error", {
-          allow: [
-            // ponytail: the interception receives native fetch options; use an immutable RequestInit when Node exports one.
-            { from: "package", package: "node", name: "RequestInit" },
-          ],
-        }],
+        // ponytail: cases share process.env and session reload/child disposal; parallel calls would test the wrong configuration.
+        "no-await-in-loop": "off",
       },
     },
     {

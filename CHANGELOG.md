@@ -8,7 +8,8 @@ All notable changes to this project are documented here.
 - Normalize custom-mode vision base URLs before the bundled client appends its request path, and raise the MCP deadline to 300 seconds to match the vendor's default vision deadline.
 - Refresh GLM-5.3/Flash model, reasoning, endpoint, entitlement and usage guidance. Keep native agent configuration in Pi rather than adding a second model client.
 - Strengthen evidence-oriented tool guidance: full-page reading, source citations, untrusted retrieved content and saved-output recovery. Correct the unsupported claim that shorter search summaries lower per-call MCP credits.
-- Add strict type-aware Oxlint and zero-warning gates with unsafe TypeScript bans, readonly input contracts, complexity ceilings and blocking lint/TypeScript suppression guards. Repair all lint findings without disabling safety rules or exempting test sizes.
+- Add strict type-aware Oxlint and zero-warning gates with unsafe TypeScript bans, readonly input contracts, scoped production/fixture complexity ceilings and blocking lint/TypeScript suppression guards. Repair all findings and apply the owner's final rule refinements, retaining strict void/mutation safety and narrow sequential/native interoperability allowances.
+- Replace artificial auth recursion and promise-reduced vision scenarios with ordered loops; use native platform declarations instead of duplicated handle types. Document the Vitest rules' actual limits with the retained `node:test` runner.
 - Keep large MCP responses safe from JavaScript spread-argument limits; verify complete private saved output with 160,000 text blocks.
 - Refresh the coherent Pi 1.0.3 development snapshot and remove obsolete vulnerable development dependencies. Independently qualify latest official Pi and maintained fork, and exercise all four live MCP services with public fixtures.
 

@@ -18,11 +18,11 @@ const equal = assert.strictEqual;
 const deepEqual = assert.deepStrictEqual;
 
 /** @typedef {Readonly<{root: string; agentDir: string; childHome: string; logPath: string}>} Fixture */
-/** @typedef {Readonly<{after: (fn: () => void | Promise<void>) => void; test: {(name: string, fn: () => Promise<void>): Promise<void>; (name: string, options: Readonly<Pick<import("node:test").TestOptions, "skip">>, fn: () => Promise<void>): Promise<void>}}> } TestContext */
+/** @typedef {import("node:test").TestContext} TestContext */
 /** @typedef {import("@earendil-works/pi-coding-agent").AgentSession} NativeSession */
-/** @typedef {Readonly<Pick<import("node:http").IncomingMessage, "method" | typeof Symbol.asyncIterator>> & {readonly headers: Readonly<{authorization?: string}>}} FixtureRequest */
-/** @typedef {Readonly<Pick<import("node:http").ServerResponse, "writeHead" | "end">>} FixtureResponse */
-/** @typedef {string | Readonly<Pick<Request, "url">> | Readonly<Pick<URL, "toString">>} FetchInput */
+/** @typedef {import("node:http").IncomingMessage} FixtureRequest */
+/** @typedef {import("node:http").ServerResponse} FixtureResponse */
+/** @typedef {string | Request | URL} FetchInput */
 /** @typedef {Readonly<{calls: readonly Readonly<{auth?: string; params: Readonly<{name: string; arguments?: Readonly<Record<string, unknown>>}>}>[]; terminations: () => number}>} HttpFixture */
 
 /** @param {Readonly<{content: readonly Readonly<{type: string; text?: string}>[]}>} result */
@@ -217,7 +217,7 @@ async function verifyVisionConfiguration(session, fixture, image) {
     { name: "explicit overrides and custom endpoint", env: { Z_AI_VISION_MODEL: "glm-5.3-flash", Z_AI_VISION_MODEL_TEMPERATURE: "0.7", Z_AI_VISION_MODEL_TOP_P: "0.9", PLATFORM_MODE: "CUSTOM", Z_AI_BASE_URL: "https://vision.example.test/v4///" }, model: "glm-5.3-flash", temperature: 0.7, topP: 0.9, url: "https://vision.example.test/v4/chat/completions" },
     { name: "empty custom endpoint retains vendor fallback", env: { Z_AI_BASE_URL: "" }, model: "glm-5.3-flash", temperature: 0.7, topP: 0.9, url: "https://open.bigmodel.cn/api/paas/v4/chat/completions" },
   ];
-  await cases.reduce(/** @param {Readonly<Promise<null>>} previous */ (previous, scenario, index) => previous.then(async () => {
+  for (const [index, scenario] of cases.entries()) {
     Object.assign(process.env, scenario.env, { Z_AI_API_KEY: "synthetic-zai-credential" });
     if (index > 0) { await session.reload(); }
     const vision = prepareVisionFixture(session);
@@ -232,8 +232,7 @@ async function verifyVisionConfiguration(session, fixture, image) {
     equal(receipt.url, scenario.url, scenario.name);
     equal(receipt.maxTokens, 42);
     equal(receipt.logPath, logPath, "the vendor retains the selected private log destination");
-    return null;
-  }), Promise.resolve(null));
+  }
   assert.match(await readFile(logPath, "utf8"), /Report the intercepted offline request/);
   await assert.rejects(() => access(join(childHome, ".zai")), { code: "ENOENT" }, "no default-home log directory is created");
 }

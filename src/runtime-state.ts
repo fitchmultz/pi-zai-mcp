@@ -49,7 +49,7 @@ export function resetGlobalStateForTests(): void {
 export function registerStatusCommand(pi: Readonly<Pick<ZaiExtensionAPI, "registerCommand">>, getStatusJson: () => string): void {
   pi.registerCommand("zai-mcp-status", {
     description: "Show configured Z.ai MCP servers and connection status",
-    handler: (_args, ctx: Readonly<{ hasUI: boolean; mode: ExtensionContext["mode"]; ui: Readonly<Pick<ExtensionContext["ui"], "notify">> }>) => {
+    handler: async (_args, ctx: Readonly<{ hasUI: boolean; mode: ExtensionContext["mode"]; ui: Readonly<Pick<ExtensionContext["ui"], "notify">> }>) => {
       const status = getStatusJson();
       if (ctx.hasUI) {
         ctx.ui.notify(status, "info");
@@ -57,7 +57,6 @@ export function registerStatusCommand(pi: Readonly<Pick<ZaiExtensionAPI, "regist
         const stream = ctx.mode === "print" ? process.stdout : process.stderr;
         stream.write(`${status}\n`);
       }
-      return Promise.resolve();
     },
   });
 }

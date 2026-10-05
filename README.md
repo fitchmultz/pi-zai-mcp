@@ -252,7 +252,11 @@ pi install -l /path/to/pi-zai-mcp
 
 `oxlint.config.ts` uses type-aware linting and TypeScript diagnostics, with correctness, suspicious and performance categories blocking. It bans unsafe TypeScript, floating/misused promises, dishonest assertions, unfinished-work comments and inline lint suppressions. CI runs the same zero-warning policy; `lint` is no longer an alias for typechecking.
 
-Production ceilings are complexity 10, depth 3, four parameters, 40 statements/function, 80 lines/function and 500 lines/file (excluding blank lines/comments). The small native Pi adapter has a documented five-parameter allowance because the SDK owns that callback signature. Any other interoperability or owned-resource exceptions are narrowly documented in configuration. Pedantic/style/restriction categories are not enabled wholesale.
+Production ceilings are complexity 10, depth 3, four parameters, 40 statements/function, 80 lines/function and 500 lines/file (excluding blank lines/comments). Existing fixture owners are bounded separately at 15/4/4/70/150/600; the native Pi execute adapter allows its SDK-required five parameters. No generated or declaration sources currently need exceptions.
+
+`strict-void-return`, props-aware parameter mutation protection and readonly input checks remain blocking. Native/SDK/platform readonly allowances identify their declarations, not names alone. `no-await-in-loop` is global, with documented exceptions only for ordered authentication and shared environment/session vision scenarios. `require-await`, underscore naming and consistent-function-scoping are intentionally disabled; nullable-object conditions and shorthand void arrows are allowed.
+
+Vitest assertion rules are configured with the actual assertion helpers, but Oxlint 1.87 does not recognize `node:test` blocks for `expect-expect`; `no-conditional-expect` recognizes imported Vitest `expect`, not this repo's Node `assert.*`. They are not claimed as native assertion guards. The runner remains `node:test`. Pedantic/style/restriction categories are not enabled wholesale.
 
 ```bash
 npm run lint:fix    # Apply safe fixes; repair remaining findings
@@ -270,7 +274,8 @@ npm run lint:agent  # Blocking checks with agent-oriented diagnostics
 ```text
 extensions/zai-mcp-*.ts  # per-server pi package entrypoints plus status command
 extensions/zai-mcp.ts    # legacy all-in-one entrypoint for direct local loading
-src/index.ts             # shared MCP schemas, connections, authentication and execution
+src/index.ts             # shared MCP schemas, connections and execution
+src/auth.ts              # native service-key precedence and ordered provider resolution
 src/register-tool.ts     # typed native Pi tool adapter
 src/tools.ts             # argument projection and bounded result rendering
 src/output.ts            # private saved outputs and bounded MCP text
