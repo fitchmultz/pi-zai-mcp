@@ -331,28 +331,29 @@ async function verifySearch(session, notifications, fixture) {
     /Owned service failure/,
   );
   assert.ok(search.renderResult !== undefined);
+  const renderContext = {
+    args: { query: "fixture-error" },
+    toolCallId: "search-error",
+    state: undefined,
+    lastComponent: undefined,
+    cwd: process.cwd(),
+    executionStarted: true,
+    argsComplete: true,
+    expanded: false,
+    isPartial: false,
+    showImages: false,
+    isError: true,
+    durationMs: undefined,
+    outputPad: 1,
+    invalidate: () => {
+      /* Static render assertion does not mount a component. */
+    },
+  };
   const failure = search.renderResult(
     { content: [{ type: "text", text: "Owned service failure" }], details: undefined },
     { expanded: false, isPartial: false },
     session.extensionRunner.createContext().ui.theme,
-    {
-      args: { query: "fixture-error" },
-      toolCallId: "search-error",
-      state: undefined,
-      lastComponent: undefined,
-      cwd: process.cwd(),
-      executionStarted: true,
-      argsComplete: true,
-      expanded: false,
-      isPartial: false,
-      showImages: false,
-      isError: true,
-      durationMs: undefined,
-      outputPad: 1,
-      invalidate: () => {
-        /* Static render assertion does not mount a component. */
-      },
-    },
+    renderContext,
   );
   assert.match(failure.render(80).join("\n"), /failed/);
   assert.strictEqual(fixture.calls.length, 2, "a failed MCP result is not automatically replayed");
