@@ -347,6 +347,8 @@ async function verifySearch(session, notifications, fixture) {
       isPartial: false,
       showImages: false,
       isError: true,
+      durationMs: undefined,
+      outputPad: 1,
       invalidate: () => {
         /* Static render assertion does not mount a component. */
       },
