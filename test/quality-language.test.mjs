@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { glob, realpath, writeFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   checker,
   compareCompiler,
@@ -135,9 +135,16 @@ await test("language scope: maintained inventory matches actual lint and compile
     .trim()
     .split("\n")
     .map((path) => resolve(repo, path));
-  const maintainedProgram = program.filter(
-    (path) => !relative(repo, path).startsWith("node_modules/"),
-  );
+  // Linked host dependencies resolve outside the repo; only owned files join the inventory.
+  const maintainedProgram = program.filter((path) => {
+    const local = relative(repo, path);
+    return (
+      !isAbsolute(local) &&
+      local !== ".." &&
+      !local.startsWith(`..${sep}`) &&
+      !local.startsWith(`node_modules${sep}`)
+    );
+  });
   assert.deepEqual(
     maintainedProgram.toSorted(),
     inventory.toSorted(),
