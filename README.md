@@ -1,324 +1,90 @@
 # pi-zai-mcp
 
-Give pi agents Z.ai-powered web search, URL reading, repository reading, and vision tools through MCP without leaving a pi session. This is an unofficial community package, not an official Z.ai package.
+Add Z.AI web search, page reading, public GitHub research, and image/video analysis to your Pi session. Ask Pi to check current documentation or explain a screenshot, and it can use these four tools while you keep working.
 
-This package focuses on Z.AI MCP servers. GLM-5.3 model access is covered by Pi's built-in `zai` Coding Plan provider (`ZAI_API_KEY`); this package adds external research and vision tools. Model selection, reasoning, streaming and conversation history remain native Pi capabilities, not a second model client.
+![Pi sends research requests to Z.AI HTTP MCP services and visual requests through a bundled local vision server, then receives text results.](.github/readme/tool-flow.png)
 
-## What you get
+_Four tools connect on demand; Pi keeps control of your coding model and conversation._
 
-`pi-zai-mcp` registers up to four curated pi tools, one per Z.AI MCP server. Each server has its own package extension file, so `pi config` can enable or disable them independently:
+## Start here
 
-- `z_ai_search` — search the live web with Z.AI Web Search MCP.
-- `z_ai_reader` — read URLs and convert pages to model-friendly Markdown/text with Z.AI Web Reader MCP.
-- `z_ai_zread` — inspect public GitHub repositories through Zread search, file reading, and directory-structure actions.
-- `z_ai_vision` — analyze images and videos through Z.AI vision actions for UI screenshots, OCR, error screenshots, diagrams, charts, UI diffs, general image understanding, and video understanding.
-
-Z.AI also documents Slide/Poster, Translation, and Video Effect Template agents as API agents, not MCP servers. They are not registered as MCP tools by this package unless Z.AI publishes MCP endpoints for them.
-
-## Z.AI MCP coverage
-
-Reviewed the [quick start](https://docs.z.ai/guides/overview/quick-start), [GLM-5.3](https://docs.z.ai/guides/llm/glm-5.3), [Flash/FlashX](https://docs.z.ai/guides/vlm/glm-5.3-flash), [migration](https://docs.z.ai/guides/overview/migrate-to-glm-new), capability and Coding Plan/MCP documentation on **2026-10-05**:
-
-- GLM-5.3 is text-only; GLM-5.3-Flash/FlashX are multimodal. All advertise 1M context and 128K maximum output, forced reasoning, streaming, function calling, context caching and structured output. Pi's actual input capabilities and configured context limits still govern the session.
-- GLM-5.3 and Flash are available on the Coding Plan; FlashX is not currently available on that plan.
-- All four MCP services require a compatible **GLM Coding Plan**, not merely an API key. Current credits-based plans charge 1.2 credits per search/reader/Zread call; vision uses Flash token multipliers. Legacy plan accounting can differ. See [usage policy](https://docs.z.ai/devpack/usage-policy) and [FAQ](https://docs.z.ai/devpack/faq).
-- Web Search MCP documents web search with query, domain filter, recency filter, content size, and location options. The current remote MCP tool is `web_search_prime`.
-- Web Reader MCP documents URL reading with timeout, cache, Markdown/text, image retention, GFM, image data URL, image summary, and link summary options. The current remote MCP tool is `webReader`.
-- Zread MCP documents `search_doc`, `read_file`, and `get_repo_structure` for public GitHub repository search, file reading, and structure inspection.
-- Vision MCP documents UI artifact generation, screenshot OCR, error screenshot diagnosis, technical diagram understanding, data visualization analysis, UI diff checking, image analysis, and video analysis. The bundled npm package (`@z_ai/mcp-server@0.1.5`) exposes the image/video actions as `analyze_image` and `analyze_video`.
-
-The pi-facing API is intentionally smaller than the upstream MCP tool list. Upstream MCP names are implementation details; agents see four stable tools with clear arguments.
-
-## Install
-
-Install from npm:
+You need [Pi](https://pi.dev), Node.js **22.19 or newer**, and a Z.AI API key with a compatible **GLM Coding Plan**. This is an unofficial community package maintained by Mitch Fultz.
 
 ```bash
 pi install npm:pi-zai-mcp
+export Z_AI_API_KEY="your_z_ai_api_key"
+pi
 ```
 
-Install from GitHub:
+Inside Pi, run `/zai-mcp-status` to see the enabled services, then try:
 
-```bash
-pi install https://github.com/fitchmultz/pi-zai-mcp
-```
+> Use z_ai_search to find the latest Node.js release notes, then use z_ai_reader to summarize the official page and cite its URL.
 
-Compatibility: Pi **1.0.0** remains the suggested support floor. Host runtime packages remain optional wildcard peers rather than hard peer/engines pins. Required qualification targets are the latest stable official Pi and latest maintained fork `main`, resolving version/commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not validation targets.
+Services connect on their first tool call. `lazy_not_connected_until_first_use` in the status output is expected before then; startup makes no paid tool calls. Real calls need network access and consume your plan's usage allowance—check [Z.AI's usage policy](https://docs.z.ai/devpack/usage-policy) for current pricing.
 
-Try it without installing permanently:
+Already signed into Z.AI through Pi's `/login`? You can use that stored key instead of setting an environment variable. The extension also accepts `ZAI_API_KEY` and `ZAI_CODING_CN_API_KEY`; environment variables take precedence. Pi **1.0.0** is the suggested support floor.
+
+For all arguments and settings, see the [tool and configuration reference](docs/reference.md).
+
+## What you can ask it to do
+
+| Tool          | Useful for                                                             | Example request                                               |
+| ------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `z_ai_search` | Current web information, with domain and recency filters               | “Find recent announcements from docs.z.ai.”                   |
+| `z_ai_reader` | Full pages as Markdown or text                                         | “Read this documentation URL and summarize the setup steps.”  |
+| `z_ai_zread`  | Search, files, and directory structure in public GitHub repos          | “Use Zread to explain how vitejs/vite handles configuration.” |
+| `z_ai_vision` | Screenshots, OCR, diagrams, charts, UI comparisons, images, and videos | “Use vision to explain the error in /path/to/screenshot.png.” |
+
+Vision needs a local file path or remote URL. For a UI comparison, supply both reference and actual screenshots. Video analysis supports MP4, MOV, and M4V files up to 8 MB. Zread may reject repositories that Z.AI has not indexed.
+
+Pi shows progress while a call runs and a compact result when it finishes. Press **Ctrl+O** to expand the tool output. Large results are limited to 50 KB or 2,000 lines, with the full text saved in a private temporary file whose path appears in the result. Saved files remain until you or your OS removes them.
+
+## Choose your tools
+
+Run `pi config`, open the resources for `pi-zai-mcp`, and enable or disable each server independently:
+
+- `extensions/zai-mcp-search.ts`
+- `extensions/zai-mcp-reader.ts`
+- `extensions/zai-mcp-zread.ts`
+- `extensions/zai-mcp-vision.ts`
+
+Keep `extensions/zai-mcp-status.ts` enabled for `/zai-mcp-status`. Disabling vision leaves the three research tools available.
+
+If a call fails, run `/zai-mcp-status` and check `lastError`, your API key, plan entitlement, and network connection. The [reference](docs/reference.md#configure) covers timeouts, vision settings, and the legacy server allowlist.
+
+## Other ways to install
+
+Try the package for one session without adding it to your settings:
 
 ```bash
 export Z_AI_API_KEY="your_z_ai_api_key"
 pi -e npm:pi-zai-mcp
 ```
 
-Run from a local clone:
+Or install from this repository:
 
 ```bash
-git clone https://github.com/fitchmultz/pi-zai-mcp.git
-cd pi-zai-mcp
-npm install
-export Z_AI_API_KEY="your_z_ai_api_key"
-pi -e .
+pi install https://github.com/fitchmultz/pi-zai-mcp
 ```
 
-## GLM-5.3 quality setup
+For a local clone, see [development setup](docs/development.md#local-setup).
 
-Use the [official Z.AI Pi setup](https://docs.z.ai/devpack/tool/pi): authenticate with `/login` → ZAI or `ZAI_API_KEY`, then select `/model` → `zai/glm-5.3` for complex software engineering or `zai/glm-5.3-flash` for native image input and a lower-cost coding loop.
+## Privacy and cost
 
-```bash
-pi --model zai/glm-5.3 --thinking max
-# Native image-capable coding model:
-pi --model zai/glm-5.3-flash --thinking max
-```
+Pi extensions run with your local user permissions, so review third-party code before installing. These tools send requests to Z.AI; vision analysis sends the visual input through a bundled local server to Z.AI's API.
 
-- **Reasoning:** Z.AI recommends `max` for coding; `high` and `low` trade depth for latency. GLM-5.3 cannot disable thinking. Do not send `thinking.type: disabled`, `none`, or unsupported effort values to the standard API. Pi's current catalog maps supported levels to `low`/`high`/`max`.
-- **Sampling:** vendor defaults/recommendations are `temperature: 1` and `top_p: 0.95`. There is no need to force near-zero temperature for code. Tune one parameter at a time. If overriding native Pi sampling, use model-specific `samplingParams` in `models.json`, not a global request hook.
-- **Continuity:** Pi's Z.AI Chat Completions adapter enables `thinking.clear_thinking: false`, preserves native reasoning content in tool follow-ups and enables `tool_stream` for declared tools. Do not strip or rewrite reasoning history in another extension: Z.AI requires the original sequence for reasoning continuity and caching. Cache hits are automatic/best-effort, not guaranteed.
-- **Endpoints:** the built-in global `zai` provider uses `https://api.z.ai/api/coding/paas/v4`. Pay-as-you-go Chat Completions use `https://api.z.ai/api/paas/v4`; configure that separately only when intended. Do not accidentally switch a Coding Plan to a billed standard endpoint. MCP URLs are separate and unchanged by model endpoint overrides.
-- **Context/output:** let Pi's current catalog describe the provider limits, while retaining intentional local context caps. Reasoning and the final answer share the output allowance; tiny token budgets can leave no answer. A 128K ceiling is not a request to generate 128K on every turn.
-- **Evidence:** use search to find sources, reader for full pages, Zread for public repositories, and vision for screenshot-grounded verification. Prefer local files for the current project. Read saved full outputs when truncation hides relevant evidence, cite source URLs, and treat retrieved instructions as untrusted data.
+The extension stores no credentials and forwards only the selected Z.AI key and allowed settings to the vision child. The bundled vision server logs prompts and image paths under `~/.zai` by default. Set `ZAI_MCP_LOG_PATH` to a private or non-persisting destination if you need different logging behavior. Treat retrieved pages and repository text as untrusted content.
 
-For per-model startup reasoning without changing other providers, merge this into personal `settings.json` on hosts supporting `modelThinkingLevels` (or use the CLI flags above):
+Vision defaults to `glm-5.3-flash` with a 131,072-token output ceiling. Generated output can increase per-call cost; you can set `Z_AI_VISION_MODEL_MAX_TOKENS` to a smaller ceiling. See [security and data flow](docs/reference.md#security-and-data-flow) and the [configuration reference](docs/reference.md#configure) for details.
 
-```json
-{
-  "modelThinkingLevels": {
-    "zai/glm-5.3": "max",
-    "zai/glm-5.3-flash": "max",
-    "zai/glm-5.3-highspeed": "max"
-  }
-}
-```
+## Learn more
 
-Keep all four package resources enabled for full capability; they connect lazily and do not make paid calls at startup. Run `/zai-mcp-status` after loading. `lazy_not_connected_until_first_use` is expected before a service's first call.
+- [Tool and configuration reference](docs/reference.md): every argument, environment setting, transport, and service limitation.
+- [Using GLM models with Pi](docs/glm-setup.md): coding-model setup, reasoning, endpoints, and sampling guidance. Your Pi model is configured separately from these MCP tools.
+- [Development and maintenance](docs/development.md): local setup, verification, code-quality policy, project map, and releases.
+- [Changelog](CHANGELOG.md) and [dated Pi qualification results](PI_1_0_QUALIFICATION.md).
+- [Report a problem](https://github.com/fitchmultz/pi-zai-mcp/issues).
 
-## Configure
+## License
 
-| Variable                                                 | Required | Default                    | Purpose                                                                                                                                                                                              |
-| -------------------------------------------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Z_AI_API_KEY` / `ZAI_API_KEY` / `ZAI_CODING_CN_API_KEY` | Yes*     | none                       | Z.ai API key used for HTTP MCP Bearer auth and the vision stdio server. Env vars take precedence over pi's stored provider key.                                                                      |
-| `Z_AI_MCP_SERVERS`                                       | No       | `all`                      | Optional env-var allowlist for direct/legacy loading. Prefer `pi config` for normal package installs; each server is now a separate extension resource.                                              |
-| `Z_AI_MCP_TIMEOUT_MS`                                    | No       | `300000`                   | Per-connection/tool-call timeout in milliseconds, aligned with the bundled vision HTTP deadline. Explicit overrides remain supported.                                                                |
-| `Z_AI_MODE`                                              | No       | `ZAI`                      | Passed through to the vision MCP server; Z.AI docs list `ZAI` as the supported value.                                                                                                                |
-| `Z_AI_VISION_MODEL`                                      | No       | `glm-5.3-flash`            | Optional user override of the bundled vision server's model.                                                                                                                                         |
-| `Z_AI_VISION_MODEL_MAX_TOKENS`                           | No       | `131072`                   | Optional user override of the bundled vision server's maximum output tokens.                                                                                                                         |
-| `Z_AI_VISION_MODEL_TEMPERATURE`                          | No       | `1` for Flash/FlashX       | Vision sampling override; other models retain vendor defaults.                                                                                                                                       |
-| `Z_AI_VISION_MODEL_TOP_P`                                | No       | `0.95` for Flash/FlashX    | Vision nucleus-sampling override; other models retain vendor defaults.                                                                                                                               |
-| `Z_AI_BASE_URL`                                          | No       | vendor global standard API | Vision-only vendor setting, honored only when platform mode does not select a built-in endpoint; recognized `ZAI`/Zhipu modes replace it. Does not configure Pi's agent model or HTTP MCP endpoints. |
-
-\* If env vars are unset, the extension asks the current Pi model registry to resolve the first available Z.ai provider API key. Pi owns its selected agent directory, stored credentials, templates, command resolution and caching. It checks `zai` (global), then `zai-coding-cn` (China), then configured catalog aliases whose `baseUrl` points at a Z.ai / Zhipu (BigModel) endpoint. Header-only model authentication does not replace this external service's required bearer API key. Run `/login` in pi and choose a ZAI provider to store this key.
-
-The bundled vision server uses `glm-5.3-flash` with a 131,072-token output ceiling and enabled thinking (default `max` effort upstream). `PLATFORM_MODE` takes precedence over `Z_AI_MODE`; recognized modes select the vendor's standard API endpoint even when `Z_AI_BASE_URL` is set. Custom-mode base URLs gain a trailing slash before the vendor appends `chat/completions`. For `glm-5.3-flash` and `glm-5.3-flashx` the extension corrects the vendor package's older `0.8`/`0.6` sampling defaults to Z.AI's recommended `1`/`0.95`, preserving explicit user overrides and legacy-model settings. The higher output ceiling can increase per-call cost; actual charges depend on service pricing and generated output. Vision MCP is a separate single-turn analysis, not Pi's native image conversation or streaming provider.
-
-Example: disable vision server access for a lighter setup: run `pi config`, open package resources for `pi-zai-mcp`, and disable `extensions/zai-mcp-vision.ts`.
-
-For one-off shell runs, this legacy env allowlist still works:
-
-```bash
-export Z_AI_MCP_SERVERS=search,reader,zread
-```
-
-## Tool reference
-
-Agents can inspect these descriptions through pi tool discovery. This section is the human-readable source of truth for the curated pi-facing shape.
-
-### `z_ai_search`
-
-Search the live web through Z.AI Web Search MCP.
-
-Arguments:
-
-- `query` — required search query. Z.AI recommends keeping it under about 70 characters.
-- `domain_filter` — optional whitelist domain such as `docs.z.ai` or `github.com`.
-- `recency_filter` — optional `oneDay`, `oneWeek`, `oneMonth`, `oneYear`, or `noLimit`.
-- `content_size` — optional `medium` or `high`; defaults to `high` for more context, specify `medium` for shorter summaries. This does not imply lower per-call MCP credits.
-- `location` — optional `cn` or `us` region hint.
-
-### `z_ai_reader`
-
-Read a specific URL through Z.AI Web Reader MCP.
-
-Arguments:
-
-- `url` — required URL to fetch and convert.
-- `timeout` — optional timeout in seconds.
-- `no_cache` — optional cache bypass.
-- `return_format` — optional `markdown` or `text`.
-- `retain_images` — optional image-reference retention.
-- `no_gfm` — optional GitHub Flavored Markdown disable switch.
-- `keep_img_data_url` — optional image data URL retention.
-- `with_images_summary` — optional image summary.
-- `with_links_summary` — optional link summary.
-
-### `z_ai_zread`
-
-Inspect public GitHub repositories through Z.AI Zread MCP.
-
-Arguments:
-
-- `action` — required `search_doc`, `read_file`, or `get_repo_structure`.
-- `repo_name` — required public GitHub repository in `owner/repo` form.
-- `query` — required for `search_doc`.
-- `language` — optional `en` or `zh` for `search_doc`.
-- `file_path` — required for `read_file`.
-- `dir_path` — optional for `get_repo_structure`; defaults upstream to the repository root.
-
-### `z_ai_vision`
-
-Analyze images and videos through Z.AI Vision MCP. For most MCP clients, images must be available as local paths or remote URLs; pasting images directly may bypass MCP and call the model provider instead.
-
-Arguments:
-
-- `action` — required action:
-  - `ui_to_artifact` — convert UI screenshot to code, prompt, spec, or description.
-  - `extract_text_from_screenshot` — OCR screenshots containing text, code, terminals, or docs.
-  - `diagnose_error_screenshot` — analyze an error screenshot and suggest fixes.
-  - `understand_technical_diagram` — explain architecture, flowchart, UML, ER, sequence, or system diagrams.
-  - `analyze_data_visualization` — analyze charts, dashboards, metrics, trends, anomalies, or comparisons.
-  - `ui_diff_check` — compare expected/reference and actual UI screenshots.
-  - `analyze_image` — general image analysis fallback.
-  - `analyze_video` — analyze MP4/MOV/M4V video up to 8 MB.
-- `prompt` — required instructions for the chosen action.
-- `image_source` — required for single-image actions except `ui_diff_check` and `analyze_video`.
-- `expected_image_source` and `actual_image_source` — required for `ui_diff_check`.
-- `video_source` — required for `analyze_video`.
-- `output_type` — required for `ui_to_artifact`; `code`, `prompt`, `spec`, or `description`.
-- `programming_language` — optional for OCR/code screenshots.
-- `context` — optional for error diagnosis.
-- `diagram_type` — optional for technical diagrams.
-- `analysis_focus` — optional for data visualizations.
-
-## Use
-
-Typical flow:
-
-1. Use one of the four curated tools directly: `z_ai_search`, `z_ai_reader`, `z_ai_zread`, or `z_ai_vision`.
-2. If a tool call fails, run `/zai-mcp-status` in interactive pi to inspect enabled server connection status. Keep `extensions/zai-mcp-status.ts` enabled if you want this command. `connectionStatus: "lazy_not_connected_until_first_use"` is normal before the first call to that server; the pi tool is still registered and available.
-3. If Z.AI changes upstream MCP tool names or schemas, update this extension deliberately and run the validation commands below.
-
-Large MCP outputs are truncated to pi's standard 50 KB / 2000 line limit. When truncation happens, the full output is saved to an owner-only temp directory (0700) and file (0600), and the path is included in the tool result. Saved results remain available until you or your OS removes them.
-
-## How it works
-
-- `search`, `reader`, and `zread` use Z.ai Streamable HTTP MCP endpoints.
-- `vision` uses the bundled `@z_ai/mcp-server` stdio server dependency through the current Node.js runtime. The extension no longer shells out to `npx` at tool-call time, so installed package behavior stays deterministic and does not depend on package-manager network access after install.
-- The package exposes one extension file per MCP server (`zai-mcp-search.ts`, `zai-mcp-reader.ts`, `zai-mcp-zread.ts`, `zai-mcp-vision.ts`) plus a small status-command extension, so `pi config` can toggle servers independently.
-- The extension registers curated tools synchronously so pi startup is fast and tool context stays small.
-- Tool calls emit an immediate progress update so the TUI shows a Z.AI tool card while MCP connection or long vision/repository work is still running.
-- Tool results use compact TUI rendering by default. Press Ctrl+O to expand a bounded, syntax-highlighted view without dumping very large MCP outputs into the terminal.
-- Calls are serialized per upstream MCP server to avoid transport-level contention when multiple actions target the same Z.AI server at once; queued calls still respect user cancellation.
-- Server connections are lazy by default to avoid blocking pi startup on network or package-manager work; `/zai-mcp-status` reports this explicitly before first use.
-- Upstream MCP error responses are surfaced as failed pi tool calls instead of successful results with error text.
-- Connection setup and tool calls honor Pi cancellation. Failed or cancelled connection attempts close their HTTP transport or vision child process before a later retry.
-- `session_shutdown` cancels owned setup/calls, gives remote HTTP session termination one second, then closes each owned transport or vision child process once. Late setup and queued calls cannot revive a shutdown connection.
-- Native programmatic callers receive a stable `{server, tool, text, truncated, file?}` outcome using the same bounded text and existing saved-file reference. Private/raw MCP details are not newly exposed.
-
-## Security and data flow
-
-- Pi extensions run with your local user permissions. Review code before installing any third-party pi package.
-- The extension reads the explicit service aliases `Z_AI_API_KEY`, `ZAI_API_KEY`, or `ZAI_CODING_CN_API_KEY`, or asks the current Pi registry for a Z.ai provider API key; it neither parses credential files nor executes auth commands itself. It stores no credentials.
-- HTTP MCP calls send the key as a Bearer token to Z.ai MCP endpoints.
-- Vision calls start a local stdio MCP server and pass only the selected Z.ai key, the SDK's safe platform environment, and vendor settings (`Z_AI_MODE`, `PLATFORM_MODE`, `Z_AI_BASE_URL`, `Z_AI_VISION_MODEL`, `Z_AI_VISION_MODEL_TEMPERATURE`, `Z_AI_VISION_MODEL_TOP_P`, `Z_AI_VISION_MODEL_MAX_TOKENS`, `Z_AI_TIMEOUT`, `Z_AI_RETRY_COUNT`, `SERVER_NAME`, `SERVER_VERSION`, `ZAI_MCP_LOG_PATH`). Other provider credentials and `NODE_OPTIONS` are not forwarded. Placeholder vision keys fail rather than falling back to another provider's token. The vendor records prompts/image paths in logs; set `ZAI_MCP_LOG_PATH` to your chosen private or non-persisting destination to avoid its default `~/.zai` log files.
-- Truncated full outputs are written under your OS temp directory, not this repo.
-
-## Automatic npm releases (maintainers)
-
-Follow the [shared release procedure](https://github.com/fitchmultz/.github#automatic-npm-releases): merge a reviewed PR into `main` with an intentional `package.json` version bump and a matching versioned `CHANGELOG.md` section. Once configured and enabled, publication is unattended after the existing compatibility checks and candidate-tarball qualification pass. Enable publishing only after confirming this package is already published on the owner's npm account, as required by [AGENTS.md](AGENTS.md). Complete any applicable package-specific release evidence before merging the bump, including the separate audit in `npm run ci`. Automation never bumps versions, overwrites releases, or republishes an existing version; existing manual publisher instructions remain valid.
-
-Failed/unpublished candidates can retry daily at 12:17 UTC or via manual dispatch of `npm release` on `main`, without another bump. Set repository variable `NPM_RELEASE_ENABLED` to anything other than `true` to stop new release plans; cancel pending runs separately when needed. Workflow validation is not evidence of a completed real OIDC publication.
-
-## Verify this repo
-
-Dated host qualification and live-service results are recorded in [Pi 1.0 qualification](PI_1_0_QUALIFICATION.md); they do not certify a new host or guarantee future service availability. For current qualification, use the shared qualifier with `--host official --target latest` and separately with the packed latest fork revision, selecting each consistent host graph before `npm run check:compat`. Plain `npm ci --ignore-scripts` installs only the locked development snapshot. The contract runs types, existing argument/transport smokes, native loading of all five resources, missing-auth rejection, loopback MCP search and private large-output checks, connected-session termination on reload, shutdown cleanup, and dry-run packing. It also starts the real bundled vision child with intercepted fetch and denied network to verify credential scoping and placeholder rejection. Use an empty HOME/agent profile. The compatibility gate deliberately excludes `npm audit` and never connects to Z.ai; audit and live service checks remain separate. This does not certify Z.ai availability or every advertised Node/platform target.
-
-```bash
-npm install
-npm run lint
-npm run ci
-npm run check:compat
-npm publish --dry-run
-```
-
-For install-path checks, use a temporary project so local `.pi/settings.json` changes do not affect another repo:
-
-```bash
-tmpdir="$(mktemp -d)"
-cd "$tmpdir"
-pi install -l /path/to/pi-zai-mcp
-```
-
-## Code quality
-
-`oxlint.config.ts` enforces type-aware code quality and compiler diagnostics across maintained source, extensions, scripts and tests, with correctness, suspicious and performance categories blocking. `tsconfig.json` independently enables `strict`, `noImplicitReturns`, `noUncheckedIndexedAccess`, `allowJs` and real `checkJs` across those four maintained directories, alongside the root TypeScript lint configuration. JavaScript receives sound JSDoc contracts and contextual inference rather than unchecked casts.
-
-**Language scope:** all maintained TypeScript and JavaScript modules receive non-type-aware lint, type-aware lint, compiler diagnostics, formatting and applicable tests. There are no unchecked maintained JavaScript files or lint-only semantic opt-ins. This intentionally preserves coverage stronger than the unchecked-JavaScript baseline. The scope regression reconciles effective compiler membership/checking with actual lint coverage; new files must retain that coverage. Root Oxlint options own type-aware lint and compiler reporting independently, without redundant CLI switches.
-
-An intentional future unchecked-JavaScript boundary must remain linted, formatted and tested. Its exact file scope needs an override disabling only installed rules marked `type_aware` in Oxlint metadata, after test/framework overrides; compiler reporting must be verified separately. `checkJs: false` alone does not disable semantic lint, `allowJs` alone does not enable compiler checking, and `--tsconfig` controls import resolution rather than selecting the type-aware engine's project. The regression fixtures independently exercise unchecked, inherited checked and `@ts-check` scopes plus TypeScript consumers of unchecked JavaScript without changing this repository's all-checked policy.
-
-Production ceilings are complexity 10, depth 3, four parameters, 40 statements/function, 80 lines/function and 500 lines/file (excluding blank lines/comments). Tests, smoke, the offline fixture and `test/quality-fixtures.mjs` retain complexity 15, depth 4 and six-parameter limits; statement count, function size and file size limits are disabled so cohesive lifecycle setup/execution/teardown stays together. Hand-maintained declarations retain applicable type/API checks with structural metrics disabled. Only dedicated `*.test-d.ts` tests allow described `@ts-expect-error` (minimum ten characters); compiler suppressions remain forbidden elsewhere. There are currently no generated source artifacts or byte-sensitive external fixture files to exclude.
-
-Readonly parameters retain explicit exported contracts, but `ignoreInferredTypes: true` deliberately allows natural contextual callbacks and is not a deep-immutability guarantee. Native allowances identify declarations in TypeScript libraries, Node (`@types/node`), Undici (`undici-types`) and Pi, not names alone. They cover request/response/options, URL, abort, stream and HTTP/test handles; Pi's `AgentSession`/`ModelRegistry` remain SDK contracts. The concrete local `src/servers.ts` `ManagedServer` allowance represents mutable lifecycle ownership, not arbitrary application data. Generic `Map`, `ReadonlyMap`, `Record` and `Readonly` are never exempted. Oxlint 1.87.0 / oxlint-tsgolint 7.0.2003 falsely flags a primitive `ReadonlyMap<string, string>` parameter; `Readonly<ReadonlyMap<string, string>>` is the narrowly documented workaround. **Known checker ceiling:** wrapping mutable maps or mutable nested values in `Readonly` can also escape detection; the workaround is only justified for genuinely readonly primitive maps, not mutable inputs.
-
-Semantic exceptions in the config are:
-
-| Boundary                       | Rule / allowance                                                | Reason and verification                                                                                                                                                        |
-| ------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/auth.ts`                  | `no-await-in-loop` module override                              | Native authentication can execute commands/refresh; the first key wins without resolving later providers. Smoke covers provider precedence and command caching.                |
-| `test/native-runtime.test.mjs` | `no-await-in-loop` module override                              | Ordered vision scenarios share environment and reload/child disposal. The native runtime test executes each scenario.                                                          |
-| `src/index.ts`                 | Props mutation only for `owner`, with qualified `ManagedServer` | Lifecycle state owns cancellation, queues and teardown; smoke races plus native reload/shutdown verify it.                                                                     |
-| `scripts/smoke.mjs`            | Props mutation only for `stream`, with Node `WriteStream`       | stdout/stderr capture temporarily owns `write` and restores it in `finally`. Its readonly override retains the complete shared allowance list. Smoke checks print/JSON output. |
-| `src/register-tool.ts`         | Five parameters                                                 | Native Pi tool execute ABI; native-runtime executes it with five arguments.                                                                                                    |
-| Smoke and native-runtime tests | `no-useless-undefined: {checkArguments: false}`                 | Native optional positions and negative-test inputs require explicit absence. Arrow-body checking stays enabled.                                                                |
-| Tests and fixtures             | `no-unnecessary-condition: {checkTypePredicates: false}`        | Preserve real Node runtime equality assertions without predicate-free aliases. Ordinary unnecessary conditions remain checked.                                                 |
-
-Floating-promise safety has empty safe-call/safe-promise lists: native promises, `test()` and subtests must still be awaited/returned/handled. `strict-void-return`, props-aware mutation and unsafe-type protection remain blocking. `require-await`, `consistent-return`, underscore naming, function-scoping preferences, and local array-sort/reverse bans are intentionally disabled. TypeScript owns return-path analysis. Nullable-object presence checks, genuine void shorthand callbacks, error rethrow identity and terminal discarded promise results are permitted deliberately.
-
-The small `oxc-parser` comment-aware policy check allows only single-line `oxlint-disable-next-line` comments with one exact approved rule and a specific adjacent explanation: `no-await-in-loop` for required sequencing, `vitest/no-conditional-expect` in verified test scope for fail-closed assertions, `typescript/prefer-readonly-parameter-types` for a reproduced plain generic-callback result defect, `typescript/no-unnecessary-condition` for a necessary live post-await guard, and `no-control-regex` for intentional escaped control-character validation. Add a site only when its diagnostic is reproduced; the checker validates structure and scope, while tests and code review verify the reason. Current production callback contracts and cancellation guards need no new suppression. Multiline disable comments cannot hide additional rules. Blanket disables, inline downgrades, unsafe-type/floating-promise suppressions and production compiler suppressions (including compiler-recognized suffix forms) remain rejected. Strings and documentation examples are not directives. Preference-only bans on comments, TODOs or `continue` are not part of the baseline.
-
-Vitest assertion rules register real helpers, but Oxlint 1.87 does not recognize `node:test` blocks for `expect-expect`; `no-conditional-expect` recognizes Vitest `expect`, not Node `assert.*`. These are not claimed as native assertion guards. The runner remains `node:test`.
-
-Oxfmt 0.72.0 owns supported maintained files using `.oxfmtrc.json`: 100 columns, two spaces, semicolons, double quotes, trailing commas, LF and final newlines. Import/package/Tailwind sorting and JSDoc rewriting are explicitly disabled. `.oxfmtignore` preserves npm's lockfile serialization; format commands load it together with `.gitignore`. VS Code recommends the official `oxc.oxc-vscode` extension and uses the repository config for code, Markdown, YAML and JSONC on save; plain JSON remains a CLI formatting responsibility so editors do not rewrite the npm-owned lockfile. Other editors can use the project's `oxfmt --lsp` ([editor setup](https://oxc.rs/docs/guide/usage/formatter/editors)).
-
-```bash
-npm run format       # Format supported maintained files; preserve the npm lockfile
-npm run lint:fix     # Apply safe fixes; repair remaining findings
-npm run format       # Formatting and lint fixes must converge
-npm run format:check
-npm run lint:agent   # Blocking checks with agent-oriented diagnostics
-npm run typecheck   # Independent strict checked-JS/TS gate
-npm run lint:policy # Comment-aware suppression policy
-npm run test:quality # Real installed-CLI configuration/behavior regressions
-npm run check       # All quality, type, smoke, native-test and package-build gates
-npm run ci          # The same acceptance workflow plus production audit
-```
-
-The regression suite runs the real installed Oxlint, compiler and policy CLIs against individual temporary projects extending the canonical TypeScript configuration. It checks expected rule IDs and primary locations, verifies compiler diagnostics separately from lint diagnostics, rejects unexpected parser/configuration/process errors, preserves checker-defect reproductions and tests paused lifecycle guards and actual control-validator inputs. Native `node:test` registrations/subtests are awaited; a package-qualified `test` safe-call exception would also exempt subtests, so none is added. Fixtures are source strings materialized outside normal compilation, not ignored maintained code.
-
-The quality rollout's diagnostic reductions come from explicit native/semantic allowances and corrected test limits; source-quality changes add checked-JavaScript contracts, clearer callback returns and a cohesive metadata/lifecycle separation. They do not claim new service-runtime bug fixes. Previously verified 0.2.2 output/privacy and vision fixes are described separately in the changelog.
-
-This is a source-only Pi package: the native loader consumes TypeScript directly. `npm run build` validates the publishable source package with `npm pack --dry-run`; there is no compiled bundle or generated-code pipeline. Independent host qualification packs and executes the actual artifact. The existing compatibility workflow also runs a read-only `quality` job invoking the same `npm run check`; formatting and policy checks are not optional side workflows.
-
-## Current limits
-
-- Requires a Z.ai API key, compatible Coding Plan entitlement and network access for real tool calls. Zread can reject public repositories that are not indexed upstream.
-- The pi-facing API is curated. If upstream MCP schemas or tool names change, update this extension and docs intentionally.
-- Verification includes strict Oxlint, TypeScript, focused contract smokes, native loopback HTTP and real offline vision-child execution, npm audit, packing, and independent official/fork host qualification. Offline checks do not certify service availability, subscription entitlement, live pricing, or every real network/cancellation phase.
-
-## Project map
-
-```text
-extensions/zai-mcp-*.ts  # per-server pi package entrypoints plus status command
-extensions/zai-mcp.ts    # legacy all-in-one entrypoint for direct local loading
-src/index.ts             # shared MCP connections, lifecycle and execution
-src/curated-tools.ts     # curated runtime schemas, metadata and call rendering
-src/auth.ts              # native service-key precedence and ordered provider resolution
-src/register-tool.ts     # typed native Pi tool adapter
-src/tools.ts             # argument projection and bounded result rendering
-src/output.ts            # private saved outputs and bounded MCP text
-src/runtime-state.ts     # shared state for split entrypoints loaded as separate modules
-src/servers.ts           # canonical MCP server definitions and legacy env allowlist
-oxlint.config.ts         # strict type-aware lint policy
-package.json             # npm + pi package manifest
-CHANGELOG.md             # release notes
-```
+[MIT](LICENSE) — Mitch Fultz.

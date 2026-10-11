@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="680" viewBox="0 0 1600 680" role="img" aria-labelledby="title desc">
+  <title id="title">Four Z.AI tools in your Pi session</title>
+  <desc id="desc">Pi sends tool requests through pi-zai-mcp. Search, page reading and Zread use Z.AI HTTP MCP services. Vision uses a bundled local stdio server that calls the Z.AI vision API. Text results return to Pi. Connections open only when a tool is used.</desc>
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#060A12"/>
+      <stop offset="0.52" stop-color="#0B1120"/>
+      <stop offset="1" stop-color="#080C16"/>
+    </linearGradient>
+    <radialGradient id="blueBloom" cx="0.18" cy="0.18" r="0.8">
+      <stop stop-color="#2563EB" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="violetBloom" cx="0.82" cy="0.36" r="0.7">
+      <stop stop-color="#8B5CF6" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#172238" stop-opacity="0.96"/>
+      <stop offset="1" stop-color="#0E1525" stop-opacity="0.98"/>
+    </linearGradient>
+    <linearGradient id="focus" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#172554" stop-opacity="0.82"/>
+      <stop offset="1" stop-color="#312E81" stop-opacity="0.58"/>
+    </linearGradient>
+    <pattern id="dotGrid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.2" fill="#94A3B8" fill-opacity="0.08"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#02040A" flood-opacity="0.45"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1 1 11 6 1 11Z" fill="#60A5FA"/>
+    </marker>
+    <marker id="arrowViolet" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1 1 11 6 1 11Z" fill="#A78BFA"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1 1 11 6 1 11Z" fill="#34D399"/>
+    </marker>
+    <style>
+      .sans { font-family: Inter, ui-sans-serif, Arial, sans-serif; }
+      .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+      .zone { font: 600 22px "JetBrains Mono", ui-monospace, monospace; letter-spacing: 1.5px; fill: #91A0B8; }
+      .title { font: 650 34px Inter, ui-sans-serif, Arial, sans-serif; fill: #F8FAFC; }
+      .copy { font: 450 26px Inter, ui-sans-serif, Arial, sans-serif; fill: #B5C3D9; }
+      .route { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- Solid canvas and restrained depth from the fleet design tokens. -->
+  <rect width="1600" height="680" fill="url(#canvas)"/>
+  <rect width="1600" height="680" fill="url(#blueBloom)"/>
+  <rect width="1600" height="680" fill="url(#violetBloom)"/>
+  <rect width="1600" height="680" fill="url(#dotGrid)"/>
+  <g class="sans">
+    <text x="64" y="70" font-size="46" font-weight="700" letter-spacing="-1" fill="#F8FAFC">Research and vision, inside Pi</text>
+    <text x="64" y="112" class="copy">Your request uses one of four tools. Each connects only when needed.</text>
+  </g>
+
+  <!-- Local ownership boundary includes the bundled vision child. -->
+  <rect x="40" y="146" width="940" height="434" rx="28" fill="#0D1423" fill-opacity="0.75" stroke="#293750"/>
+  <text x="64" y="180" class="zone">YOUR MACHINE</text>
+  <text x="1090" y="180" class="zone">Z.AI SERVICES</text>
+
+  <!-- Independent research and vision branches; return lane stays below both. -->
+  <path d="M368 270H460" class="route" stroke="#60A5FA" marker-end="url(#arrowBlue)"/>
+  <path d="M920 270H1090" class="route" stroke="#60A5FA" marker-end="url(#arrowBlue)"/>
+  <path d="M750 350V420" class="route" stroke="#A78BFA" marker-end="url(#arrowViolet)"/>
+  <path d="M920 480H1090" class="route" stroke="#A78BFA" marker-end="url(#arrowViolet)"/>
+  <path d="M1536 270H1560V616H216V470" class="route" stroke="#34D399" marker-end="url(#arrowGreen)"/>
+  <path d="M1536 480H1560" class="route" stroke="#34D399"/>
+
+  <!-- The session is the entry point and receives bounded text results. -->
+  <g class="sans" filter="url(#shadow)">
+    <rect x="64" y="200" width="304" height="270" rx="24" fill="url(#glass)" stroke="#33435D"/>
+    <rect x="88" y="228" width="48" height="40" rx="10" fill="#60A5FA" fill-opacity="0.12"/>
+    <path d="m99 239 8 8-8 8m16 0h11" fill="none" stroke="#93C5FD" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="88" y="316" class="title">Your Pi session</text>
+    <text x="88" y="361" class="copy">Ask a question</text>
+    <text x="88" y="402" class="copy">Keep your model</text>
+    <text x="88" y="438" class="copy">and conversation</text>
+  </g>
+
+  <!-- Focus card: four stable Pi-facing tools, shared lifecycle. -->
+  <g class="sans" filter="url(#shadow)">
+    <rect x="460" y="200" width="460" height="150" rx="24" fill="url(#focus)" stroke="#6D7DFF" stroke-opacity="0.62"/>
+    <text x="488" y="249" font-size="40" font-weight="700" fill="#F8FAFC">pi-zai-mcp</text>
+    <text x="488" y="286" class="copy">Four tools, shared connections</text>
+    <rect x="488" y="302" width="227" height="32" rx="16" fill="#0C1425" stroke="#38517A"/>
+    <text x="602" y="325" text-anchor="middle" class="mono" font-size="22" fill="#93C5FD">ON-DEMAND</text>
+    <rect x="580" y="420" width="340" height="120" rx="22" fill="url(#glass)" stroke="#51426F"/>
+    <text x="604" y="464" font-size="32" font-weight="650" fill="#F8FAFC">Local vision server</text>
+    <text x="604" y="507" class="copy">Bundled with the package</text>
+  </g>
+  <text x="782" y="393" class="mono" font-size="26" fill="#C4B5FD">stdio</text>
+
+  <!-- External research and vision APIs remain distinct. -->
+  <g class="sans" filter="url(#shadow)">
+    <rect x="1090" y="200" width="446" height="140" rx="24" fill="url(#glass)" stroke="#2A3851"/>
+    <rect x="1090" y="220" width="4" height="100" rx="2" fill="#60A5FA"/>
+    <text x="1118" y="248" class="title">Research MCP services</text>
+    <text x="1118" y="291" class="copy">Search · Page reader · Zread</text>
+    <text x="1118" y="323" class="mono" font-size="22" fill="#93C5FD">HTTP</text>
+    <rect x="1090" y="420" width="446" height="120" rx="24" fill="url(#glass)" stroke="#3F3658"/>
+    <rect x="1090" y="440" width="4" height="80" rx="2" fill="#A78BFA"/>
+    <text x="1118" y="464" class="title">Vision API</text>
+    <text x="1118" y="507" class="copy">Images · Screenshots · Videos</text>
+  </g>
+  <g class="sans">
+    <text x="624" y="653" font-size="28" font-weight="550" fill="#6EE7B7">Text results return to Pi</text>
+  </g>
+</svg>
