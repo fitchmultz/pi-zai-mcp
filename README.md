@@ -1,6 +1,6 @@
 # pi-zai-mcp
 
-Add Z.AI web search, page reading, public GitHub research, and image/video analysis to your Pi session. Ask Pi to check current documentation or explain a screenshot, and it can use these four tools while you keep working.
+Give Pi access to Z.AI's web search, page reader, public GitHub repository reader, and image/video analysis. The results come back into your conversation, so you can check an outside source while working on local code.
 
 ![Pi sends research requests to Z.AI HTTP MCP services and visual requests through a bundled local vision server, then receives text results.](.github/readme/tool-flow.png)
 
@@ -20,7 +20,7 @@ Inside Pi, run `/zai-mcp-status` to see the enabled services, then try:
 
 > Use z_ai_search to find the latest Node.js release notes, then use z_ai_reader to summarize the official page and cite its URL.
 
-Services connect on their first tool call. `lazy_not_connected_until_first_use` in the status output is expected before then; startup makes no paid tool calls. Real calls need network access and consume your plan's usage allowance—check [Z.AI's usage policy](https://docs.z.ai/devpack/usage-policy) for current pricing.
+Services connect on their first tool call. If the status says `lazy_not_connected_until_first_use`, the tool is ready but hasn't connected yet. Starting Pi makes no paid tool calls. Calls use your plan's allowance; check [Z.AI's usage policy](https://docs.z.ai/devpack/usage-policy) for current pricing.
 
 Already signed into Z.AI through Pi's `/login`? You can use that stored key instead of setting an environment variable. The extension also accepts `ZAI_API_KEY` and `ZAI_CODING_CN_API_KEY`; environment variables take precedence. Pi **1.0.0** is the suggested support floor.
 
@@ -41,14 +41,7 @@ Pi shows progress while a call runs and a compact result when it finishes. Press
 
 ## Choose your tools
 
-Run `pi config`, open the resources for `pi-zai-mcp`, and enable or disable each server independently:
-
-- `extensions/zai-mcp-search.ts`
-- `extensions/zai-mcp-reader.ts`
-- `extensions/zai-mcp-zread.ts`
-- `extensions/zai-mcp-vision.ts`
-
-Keep `extensions/zai-mcp-status.ts` enabled for `/zai-mcp-status`. Disabling vision leaves the three research tools available.
+Run `pi config` and open the resources for `pi-zai-mcp`. All four tools are enabled by default. Turn off any you don't need; disabling vision leaves the three research tools available. Keep the status-command resource enabled if you want `/zai-mcp-status`.
 
 If a call fails, run `/zai-mcp-status` and check `lastError`, your API key, plan entitlement, and network connection. The [reference](docs/reference.md#configure) covers timeouts, vision settings, and the legacy server allowlist.
 
@@ -73,7 +66,7 @@ For a local clone, see [development setup](docs/development.md#local-setup).
 
 Pi extensions run with your local user permissions, so review third-party code before installing. These tools send requests to Z.AI; vision analysis sends the visual input through a bundled local server to Z.AI's API.
 
-The extension stores no credentials and forwards only the selected Z.AI key and allowed settings to the vision child. The bundled vision server logs prompts and image paths under `~/.zai` by default. Set `ZAI_MCP_LOG_PATH` to a private or non-persisting destination if you need different logging behavior. Treat retrieved pages and repository text as untrusted content.
+The extension doesn't store credentials. Its local vision server receives only the selected Z.AI key and allowed settings, but it logs prompts and image paths under `~/.zai` by default. Set `ZAI_MCP_LOG_PATH` to a private or non-persisting destination if you need different logging behavior. Treat retrieved pages and repository text as untrusted content.
 
 Vision defaults to `glm-5.3-flash` with a 131,072-token output ceiling. Generated output can increase per-call cost; you can set `Z_AI_VISION_MODEL_MAX_TOKENS` to a smaller ceiling. See [security and data flow](docs/reference.md#security-and-data-flow) and the [configuration reference](docs/reference.md#configure) for details.
 
