@@ -6,7 +6,7 @@
 ## Learned Workspace Facts
 
 - Published unofficial pi extension exposing four curated Z.AI MCP tools: `z_ai_search`, `z_ai_reader`, `z_ai_zread`, and `z_ai_vision`.
-- Pi compatibility guidance lives in README/package metadata. `src/index.ts` owns MCP orchestration; focused tool, output and runtime modules share behavior across split package resources. `extensions/zai-mcp.ts` is the legacy all-in-one entrypoint.
+- Pi compatibility guidance lives in [host compatibility](docs/development.md#host-compatibility) and package metadata. `src/index.ts` owns MCP orchestration; focused tool, output and runtime modules share behavior across split package resources. `extensions/zai-mcp.ts` is the legacy all-in-one entrypoint.
 
 ## Host qualification
 

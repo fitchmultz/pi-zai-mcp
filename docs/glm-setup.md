@@ -33,4 +33,4 @@ For per-model startup reasoning without changing other providers, merge this int
 }
 ```
 
-Keep all four package resources enabled for full capability; they connect lazily and do not make paid calls at startup. Run `/zai-mcp-status` after loading. `lazy_not_connected_until_first_use` is expected before a service's first call.
+Keep all five package resources enabled for full capability. The four tools connect lazily and make no paid calls at startup. Run `/zai-mcp-status` after loading. `lazy_not_connected_until_first_use` is expected before a service's first call.

@@ -4,7 +4,7 @@ pi-zai-mcp gives Pi four Z.AI tools: web search, page reader, public repository 
 
 ![Pi sends research requests to Z.AI HTTP MCP services and visual requests through a bundled local vision server, then receives text results.](.github/readme/tool-flow.png)
 
-_Research uses Z.AI MCP services. Vision uses a bundled local server that calls the Z.AI API._
+_Pi keeps your chosen coding model and conversation._
 
 ## Install and start
 
@@ -35,9 +35,9 @@ See [other install options](docs/reference.md#other-install-options) for a tempo
 | `z_ai_zread`  | Search public GitHub repositories, read files, or list directories.             |
 | `z_ai_vision` | Analyze screenshots, text, diagrams, charts, UI comparisons, images, or videos. |
 
-Pi keeps your chosen coding model and conversation. See [GLM model setup](docs/glm-setup.md) to configure the coding model.
+See [GLM model setup](docs/glm-setup.md) to configure the coding model.
 
-Run `pi config` to enable or disable each tool. Keep the status-command resource enabled for `/zai-mcp-status`.
+Run `pi config` to enable or disable each tool. Keep `extensions/zai-mcp-status.ts` enabled for `/zai-mcp-status`.
 
 Pi shows progress and compact results. Press **Ctrl+O** to expand a result. Large results stop at 50 KB or 2,000 lines. The result includes a path to the full text in a private temporary file. Remove saved files when you no longer need them.
 
@@ -53,7 +53,7 @@ If a call fails, run `/zai-mcp-status`. Check `lastError`, your API key, plan en
 
 ## Privacy
 
-Pi extensions run with your user permissions. Review the code before installation. These tools send requests to Z.AI. Vision sends images and videos through the bundled local server to Z.AI.
+Pi extensions run with your user permissions. Review the code before installation. These tools send requests and visual input to Z.AI.
 
 The extension stores no credentials. It passes only the selected Z.AI key, safe platform variables, and allowed settings to the vision server.
 
