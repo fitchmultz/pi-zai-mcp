@@ -2,6 +2,23 @@
 
 [Back to the README](../README.md)
 
+## Other install options
+
+Try the package for one session without adding it to your settings:
+
+```bash
+export Z_AI_API_KEY="your_z_ai_api_key"
+pi -e npm:pi-zai-mcp
+```
+
+Or install from this repository:
+
+```bash
+pi install https://github.com/fitchmultz/pi-zai-mcp
+```
+
+For a local clone, see [development setup](development.md#local-setup).
+
 ## Configure
 
 | Variable                                                 | Required | Default                    | Purpose                                                                                                                                                                                              |
