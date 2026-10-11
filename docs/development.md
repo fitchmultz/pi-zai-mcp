@@ -36,6 +36,28 @@ cd "$tmpdir"
 pi install -l /path/to/pi-zai-mcp
 ```
 
+### Dependency security
+
+Audit both the repository's production graph and a fresh npm consumer of
+`npm pack`. Dependency overrides and this repo's lockfile apply to git installs,
+but do not apply when npm installs this package as a dependency.
+
+**Known upstream residual:** the latest `@z_ai/mcp-server@0.1.5` still pins MCP
+SDK 1.26.0, affected by
+[GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h).
+Repository audits report two high entries (SDK and vendor); consumer audits add
+a third propagated entry for `pi-zai-mcp`. These are one underlying advisory,
+not separate defects. `npm run ci` retains its strict audit and exits nonzero
+until upstream fixes that pin.
+
+The affected OAuth client path is not used here. The vendor's `build/index.js`
+runs `McpServer` with `StdioServerTransport`; the advisory explicitly excludes
+MCP servers and stdio clients. The extension's HTTP client uses the patched
+direct SDK with static Bearer headers, not an OAuth `authProvider`, `withOAuth()`
+or `auth()`/`fetchToken()`. This reachability assessment covers the extension's
+current transports, not other applications using the SDK. Upgrade the vendor
+when it releases a patched SDK dependency.
+
 ## Code quality
 
 `oxlint.config.ts` enforces type-aware code quality and compiler diagnostics across maintained source, extensions, scripts and tests, with correctness, suspicious and performance categories blocking. `tsconfig.json` independently enables `strict`, `noImplicitReturns`, `noUncheckedIndexedAccess`, `allowJs` and real `checkJs` across those four maintained directories, alongside the root TypeScript lint configuration. JavaScript receives sound JSDoc contracts and contextual inference rather than unchecked casts.
