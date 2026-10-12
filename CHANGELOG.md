@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.5 - 2026-10-12
+
+- Override the vision server's nested MCP SDK with the patched direct SDK for repository and checked-out Git root installs; keep the vendor and public tool APIs unchanged.
+- Include the canonical documentation and README diagram in npm packages.
+- Document the remaining upstream npm-consumer advisory and the consumer-root override: package dependency overrides do not propagate to downstream installation roots.
+
 ## 0.2.4 - 2026-10-11
 
 - Raise the direct MCP SDK dependency floor to 1.32.1 so npm and git installs receive the OAuth credential-isolation fix (GHSA-6qxp-vccf-f47h) for the extension's client.

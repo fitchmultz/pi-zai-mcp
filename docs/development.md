@@ -39,16 +39,35 @@ pi install -l /path/to/pi-zai-mcp
 ### Dependency security
 
 Audit both the repository's production graph and a fresh npm consumer of
-`npm pack`. Dependency overrides and this repo's lockfile apply to git installs,
-but do not apply when npm installs this package as a dependency.
+`npm pack`. The direct SDK floor and scoped vision-server override install SDK
+1.32.1 throughout this repository's locked production graph, and the lockfile
+also updates `proxy-addr` to 2.0.8. `npm run ci` retains its strict production
+audit.
 
 **Known upstream residual:** the latest `@z_ai/mcp-server@0.1.5` still pins MCP
 SDK 1.26.0, affected by
 [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h).
-Repository audits report two high entries (SDK and vendor); consumer audits add
-a third propagated entry for `pi-zai-mcp`. These are one underlying advisory,
-not separate defects. `npm run ci` retains its strict audit and exits nonzero
-until upstream fixes that pin.
+npm applies overrides only at an installation root. This repo's lockfile and
+overrides protect root installs, including Pi's checked-out Git package, but
+not npm consumers installing this package as a dependency. Those consumers
+still receive the vendor's pinned SDK and report the SDK advisory propagated
+through the vendor and `pi-zai-mcp`; a clean repository audit does not mean a
+clean downstream graph.
+
+Until the vendor updates its SDK, npm consumers can add this scoped override
+to their own root manifest and then regenerate their lockfile:
+
+```json
+{
+  "overrides": {
+    "@z_ai/mcp-server": {
+      "@modelcontextprotocol/sdk": "^1.32.1"
+    }
+  }
+}
+```
+
+Remove the scoped override when the vendor releases a patched SDK dependency.
 
 The affected OAuth client path is not used here. The vendor's `build/index.js`
 runs `McpServer` with `StdioServerTransport`; the advisory explicitly excludes
