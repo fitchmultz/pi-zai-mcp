@@ -43,8 +43,8 @@ jobs:
         run: npm run check
 
   compatibility:
-    uses: fitchmultz/.github/.github/workflows/pi-compatibility.yml@3b7a5f72d9c2d67d6fb53ef7bd308b005c385af3 # main
+    uses: fitchmultz/.github/.github/workflows/pi-compatibility.yml@54c687228d840506555801b9db038373e697d901 # main
     with:
-      automation-ref: 3b7a5f72d9c2d67d6fb53ef7bd308b005c385af3 # main
+      automation-ref: 54c687228d840506555801b9db038373e697d901 # main
       official-version: ${{ inputs.official-version }}
       fork-ref: ${{ inputs.fork-ref }}

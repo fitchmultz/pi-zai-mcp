@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.5 - 2026-10-12
+
+- Override the vision server's nested MCP SDK with the patched direct SDK for repository and checked-out Git root installs; keep the vendor and public tool APIs unchanged.
+- Include the canonical documentation and README diagram in npm packages.
+- Document the remaining upstream npm-consumer advisory and the consumer-root override: package dependency overrides do not propagate to downstream installation roots.
+
+## 0.2.4 - 2026-10-11
+
+- Raise the direct MCP SDK dependency floor to 1.32.1 so npm and git installs receive the OAuth credential-isolation fix (GHSA-6qxp-vccf-f47h) for the extension's client.
+- Refresh `proxy-addr` to 2.0.8 to fix IPv4-mapped IPv6 trust-subnet spoofing (GHSA-jqcg-44mw-7w3h).
+- Document the remaining upstream SDK advisory: the latest vision server still pins SDK 1.26.0, but runs an MCP server over stdio, which the advisory excludes. Keep that dependency unmodified rather than break normal consumer installs with an override-only bundle.
+- Keep the Node and Pi support floors unchanged.
+
 ## 0.2.3 - 2026-10-05
 
 - Complete strict Oxlint and Oxfmt integration with reproducible locked tooling, editor settings, comment-aware suppression enforcement and a canonical acceptance/CI gate.
