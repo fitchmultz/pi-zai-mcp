@@ -91,3 +91,9 @@ export async function truncateForTool(
   const notice = `\n\n[Z.ai MCP output truncated: ${truncation.outputLines} of ${truncation.totalLines} lines (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). Full output saved to: ${file}]`;
   return { content: truncation.content + notice, details: { truncated: true, file } };
 }
+
+export async function boundError(error: unknown): Promise<Error> {
+  const text = error instanceof Error ? error.message : stringValue(error);
+  const bounded = await truncateForTool(text);
+  return error instanceof Error && !bounded.details.truncated ? error : new Error(bounded.content);
+}

@@ -11,6 +11,7 @@ const GLM_VISION_DEFAULT_MODELS: ReadonlySet<string> = new Set(["glm-5.3-flash",
 const require = createRequire(import.meta.url);
 
 export type ServerId = "search" | "reader" | "zread" | "vision";
+export type ZaiPlatform = "ZAI" | "ZHIPU";
 type ServerKind = "http" | "stdio";
 
 export const ALL_SERVER_IDS = [
@@ -24,16 +25,22 @@ type ServerConfig = Readonly<{
   id: ServerId;
   label: string;
   kind: ServerKind;
-  url?: string;
   command?: string;
   args?: string[];
   env?: Readonly<Record<string, string>>;
 }>;
 
+export type Connection = Readonly<{
+  client: Client;
+  transport: StreamableHTTPClientTransport | StdioClientTransport;
+  close: () => Promise<void>;
+}>;
+
 export type ManagedServer = ServerConfig & {
-  client?: Client;
-  transport?: StreamableHTTPClientTransport | StdioClientTransport;
+  connection?: Connection;
+  connectionStatus?: "connecting" | "connected" | "disconnected" | "failed";
   connectPromise?: Promise<Client>;
+  disconnectPromise?: Promise<void>;
   callQueue?: Promise<void>;
   lastError?: string;
   closed?: boolean;
@@ -135,19 +142,16 @@ const SERVER_FACTORIES = {
     id: "search",
     label: "Z.ai Web Search",
     kind: "http",
-    url: "https://api.z.ai/api/mcp/web_search_prime/mcp",
   }),
   reader: () => ({
     id: "reader",
     label: "Z.ai Web Reader",
     kind: "http",
-    url: "https://api.z.ai/api/mcp/web_reader/mcp",
   }),
   zread: () => ({
     id: "zread",
     label: "Z.ai Zread Repository Reader",
     kind: "http",
-    url: "https://api.z.ai/api/mcp/zread/mcp",
   }),
   vision: () => {
     const visionCommand = resolveVisionServerCommand();
@@ -157,16 +161,19 @@ const SERVER_FACTORIES = {
       kind: "stdio",
       command: visionCommand.command,
       args: visionCommand.args,
-      env: {
-        ...visionEnvironment(),
-        Z_AI_MODE:
-          process.env.Z_AI_MODE === undefined || process.env.Z_AI_MODE.length === 0
-            ? "ZAI"
-            : process.env.Z_AI_MODE,
-      },
+      env: visionEnvironment(),
     };
   },
 } satisfies Record<ServerId, () => ManagedServer>;
+
+export function httpServerUrl(id: ServerId, platform: ZaiPlatform): string {
+  if (id === "vision") {
+    throw new Error("Vision uses a local stdio server, not HTTP MCP.");
+  }
+  const paths = { search: "web_search_prime", reader: "web_reader", zread: "zread" };
+  const host = platform === "ZHIPU" ? "open.bigmodel.cn" : "api.z.ai";
+  return `https://${host}/api/mcp/${paths[id]}/mcp`;
+}
 
 export function createServers(serverIds: readonly ServerId[] = ALL_SERVER_IDS): ManagedServer[] {
   return serverIds.map((id) => SERVER_FACTORIES[id]());

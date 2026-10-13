@@ -146,29 +146,42 @@ assert.deepStrictEqual(
 );
 
 assert.deepStrictEqual(
-  testHelpers.visionArgs({
-    action: "analyze_image",
-    image_source: "@screenshots/app.png",
-    prompt: "describe",
-  }),
-  { image_source: "screenshots/app.png", prompt: "describe" },
+  testHelpers.visionArgs(
+    {
+      action: "analyze_image",
+      image_source: "@screenshots/app.png",
+      prompt: "describe",
+    },
+    tmpdir(),
+  ),
+  { image_source: join(tmpdir(), "screenshots/app.png"), prompt: "describe" },
 );
 assert.deepStrictEqual(
-  testHelpers.visionArgs({
-    action: "ui_diff_check",
-    expected_image_source: "@expected.png",
-    actual_image_source: "@actual.png",
+  testHelpers.visionArgs(
+    {
+      action: "ui_diff_check",
+      expected_image_source: "@expected.png",
+      actual_image_source: "@actual.png",
+      prompt: "compare",
+    },
+    tmpdir(),
+  ),
+  {
+    expected_image_source: join(tmpdir(), "expected.png"),
+    actual_image_source: join(tmpdir(), "actual.png"),
     prompt: "compare",
-  }),
-  { expected_image_source: "expected.png", actual_image_source: "actual.png", prompt: "compare" },
+  },
 );
 assert.deepStrictEqual(
-  testHelpers.visionArgs({
-    action: "analyze_video",
-    video_source: "@demo.mp4",
-    prompt: "summarize",
-  }),
-  { video_source: "demo.mp4", prompt: "summarize" },
+  testHelpers.visionArgs(
+    {
+      action: "analyze_video",
+      video_source: "@demo.mp4",
+      prompt: "summarize",
+    },
+    tmpdir(),
+  ),
+  { video_source: join(tmpdir(), "demo.mp4"), prompt: "summarize" },
 );
 
 const truncated = await testHelpers.truncateForTool("small");
@@ -204,8 +217,7 @@ assert.deepStrictEqual(truncated.details, { truncated: false });
   await assert.rejects(connecting, /cancelled while connecting/);
   assert.strictEqual(connectOptions.signal.aborted, true, "connecting receives Pi cancellation");
   assert.strictEqual(closeCalls, 1, "cancellation closes the owned transport once");
-  assert.strictEqual(server.client, undefined);
-  assert.strictEqual(server.transport, undefined);
+  assert.strictEqual(server.connection, undefined);
   assert.strictEqual(server.connectPromise, undefined);
 }
 
@@ -236,8 +248,11 @@ assert.deepStrictEqual(truncated.details, { truncated: false });
     id: "search",
     label: "hanging HTTP shutdown",
     kind: "http",
-    client: new Client({ name: "fixture", version: "1" }),
-    transport: hangingTransport,
+    connection: {
+      client: new Client({ name: "fixture", version: "1" }),
+      transport: hangingTransport,
+      close: () => hangingTransport.close(),
+    },
     connectPromise: new Promise(() => {
       /* Simulate a stalled connection. */
     }),
@@ -250,15 +265,18 @@ assert.deepStrictEqual(truncated.details, { truncated: false });
     id: "reader",
     label: "rejected HTTP shutdown",
     kind: "http",
-    transport: rejectedTransport,
+    connection: {
+      client: new Client({ name: "fixture", version: "1" }),
+      transport: rejectedTransport,
+      close: () => rejectedTransport.close(),
+    },
   };
   const started = Date.now();
   await testHelpers.closeServers([hanging, rejected], 20);
   assert.ok(Date.now() - started < 500, "shutdown remains bounded when HTTP DELETE never settles");
   assert.strictEqual(hangingCloseCalls, 1, "timed-out HTTP termination still closes transport");
   assert.strictEqual(rejectedCloseCalls, 1, "failed HTTP termination still closes transport");
-  assert.strictEqual(hanging.client, undefined);
-  assert.strictEqual(hanging.transport, undefined);
+  assert.strictEqual(hanging.connection, undefined);
   assert.strictEqual(hanging.connectPromise, undefined);
   assert.strictEqual(hanging.callQueue, undefined, "shutdown resets the per-server call queue");
 }
@@ -285,20 +303,19 @@ await Promise.all(
     const server = { id: "search", label: "shutdown race", kind: "http" };
     const pending = testHelpers.connectWith(server, undefined, async () => {
       if (phase === "authentication") {
+        started.resolve();
         await wait.promise;
       }
       return { client, transport };
     });
     const rejected = assert.rejects(pending, /cancelled|shut down/);
-    if (phase === "initialize") {
-      await started.promise;
-    }
+    await started.promise;
     await Promise.all([testHelpers.closeServers([server]), testHelpers.closeServers([server])]);
     wait.resolve();
     await rejected;
     assert.strictEqual(closeCalls, 1, `${phase}: teardown closes each owned transport once`);
     assert.strictEqual(
-      server.client,
+      server.connection,
       undefined,
       `${phase}: late setup cannot publish a stale client`,
     );
@@ -325,9 +342,15 @@ try {
     "utf8",
   );
   const registry = await registryFor(agentDir);
-  assert.strictEqual(await testHelpers.getApiKey(registry), "stored-key");
+  assert.deepStrictEqual(await testHelpers.getServiceAuth(registry), {
+    key: "stored-key",
+    platform: "ZAI",
+  });
   process.env.Z_AI_API_KEY = "env-key";
-  assert.strictEqual(await testHelpers.getApiKey(registry), "env-key");
+  assert.deepStrictEqual(await testHelpers.getServiceAuth(registry), {
+    key: "env-key",
+    platform: "ZAI",
+  });
 } finally {
   await rm(agentDir, { recursive: true, force: true });
 }
@@ -346,15 +369,15 @@ try {
     "utf8",
   );
   const registry = await registryFor(codingCnAgentDir);
-  assert.strictEqual(
-    await testHelpers.getApiKey(registry),
-    "cn-stored-key",
+  assert.deepStrictEqual(
+    await testHelpers.getServiceAuth(registry),
+    { key: "cn-stored-key", platform: "ZHIPU" },
     "should read key stored under the zai-coding-cn provider",
   );
   process.env.ZAI_CODING_CN_API_KEY = "cn-env-key";
-  assert.strictEqual(
-    await testHelpers.getApiKey(registry),
-    "cn-env-key",
+  assert.deepStrictEqual(
+    await testHelpers.getServiceAuth(registry),
+    { key: "cn-env-key", platform: "ZHIPU" },
     "ZAI_CODING_CN_API_KEY env should take precedence",
   );
 } finally {
@@ -402,9 +425,9 @@ try {
     "utf8",
   );
   const registry = await registryFor(customProviderAgentDir);
-  assert.strictEqual(
-    await testHelpers.getApiKey(registry),
-    "custom-zai-key",
+  assert.deepStrictEqual(
+    await testHelpers.getServiceAuth(registry),
+    { key: "custom-zai-key", platform: "ZHIPU" },
     "should read key from a custom models.json provider pointing at a Z.AI endpoint",
   );
 } finally {
@@ -438,8 +461,14 @@ try {
     hostRefreshRuns,
     "extension status must not execute auth commands beyond native host refresh",
   );
-  assert.strictEqual(await testHelpers.getApiKey(registry), "command-key");
-  assert.strictEqual(await testHelpers.getApiKey(registry), "command-key");
+  assert.deepStrictEqual(await testHelpers.getServiceAuth(registry), {
+    key: "command-key",
+    platform: "ZAI",
+  });
+  assert.deepStrictEqual(await testHelpers.getServiceAuth(registry), {
+    key: "command-key",
+    platform: "ZAI",
+  });
   assert.strictEqual(await readFile(marker, "utf8"), "x");
 } finally {
   await rm(commandAgentDir, { recursive: true, force: true });

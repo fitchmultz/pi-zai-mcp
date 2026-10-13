@@ -55,7 +55,7 @@ export type CuratedToolConfig<T extends TSchema> = Readonly<
   readonly parameters: Readonly<T>;
   readonly promptGuidelines?: readonly string[];
   readonly toMcpToolName: (params: ToolArgs<T>) => string;
-  readonly toMcpArgs: (params: ToolArgs<T>) => Record<string, unknown>;
+  readonly toMcpArgs: (params: ToolArgs<T>, cwd: string) => Record<string, unknown>;
 };
 const OUTCOME_SCHEMA = Type.Object(
   {
@@ -81,6 +81,7 @@ export function createRegistrar<T extends TSchema>(
       promptGuidelines:
         config.promptGuidelines === undefined ? undefined : [...config.promptGuidelines],
       parameters: config.parameters,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
       outputSchema: OUTCOME_SCHEMA,
       renderCall: config.renderCall,
       renderResult: renderCuratedResult,
@@ -88,7 +89,7 @@ export function createRegistrar<T extends TSchema>(
         return execute({
           server: owner,
           toolName: config.toMcpToolName(params),
-          args: config.toMcpArgs(params),
+          args: config.toMcpArgs(params, ctx.cwd),
           registry: ctx.modelRegistry,
           signal,
           onUpdate: (result) => {

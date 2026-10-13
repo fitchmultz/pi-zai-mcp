@@ -6,6 +6,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import type { TSchema } from "typebox";
+import { resolve } from "node:path";
 
 export function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -244,7 +245,23 @@ export function zreadArgs(params: Readonly<Record<string, unknown>>): Record<str
   throw new Error(`Unsupported Zread action '${action}'.`);
 }
 
-export function visionArgs(params: Readonly<Record<string, unknown>>): Record<string, unknown> {
+function visionSource(value: string, cwd: string): string {
+  const source = value.startsWith("@") ? value.slice(1) : value;
+  try {
+    const url = new URL(source);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return source;
+    }
+  } catch {
+    // Non-URL sources are file paths in the current tool execution directory.
+  }
+  return resolve(cwd, source);
+}
+
+export function visionArgs(
+  params: Readonly<Record<string, unknown>>,
+  cwd: string,
+): Record<string, unknown> {
   const action = stringValue(params.action);
   const args = buildArgs(action, params, VISION_ACTION_ARGS);
   if (args === undefined) {
@@ -256,9 +273,7 @@ export function visionArgs(params: Readonly<Record<string, unknown>>): Record<st
       const [key, value] = entry;
       return [
         key,
-        VISION_SOURCE_KEYS.has(key) && typeof value === "string" && value.startsWith("@")
-          ? value.slice(1)
-          : value,
+        VISION_SOURCE_KEYS.has(key) && typeof value === "string" ? visionSource(value, cwd) : value,
       ];
     }),
   );

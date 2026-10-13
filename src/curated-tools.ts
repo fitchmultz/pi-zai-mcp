@@ -117,14 +117,14 @@ const VISION_SCHEMA = Type.Object({
     ] as const,
     {
       description:
-        "Vision action. Choose the most specific action; use analyze_image only as a fallback and analyze_video for MP4/MOV/M4V video up to 8 MB.",
+        "Vision action. Choose the most specific action; use analyze_image only as a fallback. Local images: JPG/JPEG/PNG up to 5 MiB; local videos: MP4/MOV/M4V up to 8 MiB.",
     },
   ),
   image_source: Type.Optional(
     Type.String({
       minLength: 1,
       description:
-        "Local image path or remote image URL. Required for single-image actions except ui_diff_check and analyze_video.",
+        "Local JPG/JPEG/PNG up to 5 MiB (relative to the session directory), or HTTP/HTTPS URL. Required for single-image actions except ui_diff_check and analyze_video.",
     }),
   ),
   expected_image_source: Type.Optional(
@@ -143,7 +143,7 @@ const VISION_SCHEMA = Type.Object({
     Type.String({
       minLength: 1,
       description:
-        "Required for analyze_video: local path or remote URL to MP4, MOV, or M4V video up to 8 MB.",
+        "Required for analyze_video: local MP4/MOV/M4V up to 8 MiB (relative to the session directory), or HTTP/HTTPS video URL.",
     }),
   ),
   prompt: Type.String({

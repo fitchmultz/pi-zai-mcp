@@ -14,13 +14,13 @@ export Z_AI_API_KEY="your_z_ai_api_key"
 pi
 ```
 
-You can also use a key stored through Pi's `/login` command. The extension accepts `ZAI_API_KEY` and `ZAI_CODING_CN_API_KEY`. Environment variables take precedence over stored keys.
+You can also use a key stored through Pi's `/login` command. The extension accepts `ZAI_API_KEY` and `ZAI_CODING_CN_API_KEY`. Environment variables take precedence over stored keys. Global keys use Z.AI; the China alias, `zai-coding-cn` login and BigModel provider aliases use the separate BigModel services.
 
 In Pi, enter:
 
 > Use z_ai_search to find the latest Node.js release notes.
 
-Run `/zai-mcp-status` to check each service. The status shows `lazy_not_connected_until_first_use` until a service connects. Each service connects on its first tool call. Pi startup makes no paid tool calls.
+Run `/zai-mcp-status` to check each service. Before first use, status is `lazy_not_connected_until_first_use`; it also distinguishes connecting, failed and disconnected services. Dropped or expired connections reconnect on the next explicit call, never by replaying the failed request. Each service connects lazily. Pi startup makes no paid tool calls.
 
 See [other install options](docs/reference.md#other-install-options) for a temporary session or a GitHub install.
 
@@ -37,11 +37,11 @@ See [GLM model setup](docs/glm-setup.md) to configure the coding model.
 
 Run `pi config` to enable or disable each tool. Keep `extensions/zai-mcp-status.ts` enabled for `/zai-mcp-status`.
 
-Pi shows progress and compact results. Press **Ctrl+O** to expand a result. Large results stop at 50 KB or 2,000 lines. The result includes a path to the full text in a private temporary file. Remove saved files when you no longer need them.
+Pi shows progress and compact results. Press **Ctrl+O** to expand a result. Large results and failure messages stop at 50 KB or 2,000 lines, plus a notice pointing to the full text in a private temporary file. Remove saved files when you no longer need them.
 
 ## Limits and cost
 
-Vision needs a local file path or remote URL. UI comparisons need both reference and actual screenshots. Videos must use MP4, MOV, or M4V format and must not exceed 8 MB.
+Vision needs a local file path or HTTP/HTTPS URL. Relative paths resolve against the current Pi session directory, including in SDK sessions. Local images must be JPG, JPEG or PNG and at most 5 MiB. UI comparisons need both reference and actual screenshots. Local videos must use MP4, MOV or M4V format and be at most 8 MiB.
 
 Zread can reject repositories that Z.AI has not indexed. Real tool calls require network access and consume your plan allowance. Check [Z.AI's usage policy](https://docs.z.ai/devpack/usage-policy) for current pricing.
 
@@ -55,7 +55,7 @@ Pi extensions run with your user permissions. Review the code before installatio
 
 The extension stores no credentials. It passes only the selected Z.AI key, safe platform variables, and allowed settings to the vision server.
 
-The vision server logs prompts and image paths under `~/.zai` by default. Set `ZAI_MCP_LOG_PATH` to a private or non-persisting destination when needed. Treat retrieved pages and repository text as untrusted content.
+The vision server logs prompts and image paths under `~/.zai` by default. Its stderr is discarded to prevent undrained logging from blocking or filling memory; this does not disable vendor file logging. Set `ZAI_MCP_LOG_PATH` to a private or non-persisting destination when needed. Cancellation closes the local vision process, but cannot guarantee stopped remote computation or billing. Treat retrieved pages and repository text as untrusted content.
 
 ## Reference
 

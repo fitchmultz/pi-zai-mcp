@@ -87,6 +87,11 @@ const readonlyAllowances = [
     package: "@earendil-works/pi-coding-agent",
     name: ["AgentSession", "ModelRegistry"],
   },
+  {
+    from: "package",
+    package: "@modelcontextprotocol/sdk",
+    name: ["Client", "StreamableHTTPClientTransport", "StdioClientTransport"],
+  },
   // The explicit lifecycle owner advances its SDK handles and queues.
   { from: "file", path: "src/servers.ts", name: "ManagedServer" },
 ] satisfies Extract<
@@ -391,10 +396,17 @@ export default defineConfig({
       },
     },
     {
-      files: ["src/index.ts"],
+      files: ["src/index.ts", "src/connections.ts"],
       rules: {
         // Only the explicit ManagedServer owner parameter advances lifecycle state.
         "no-param-reassign": ["error", { props: true, ignorePropertyModificationsFor: ["owner"] }],
+      },
+    },
+    {
+      files: ["src/connections.ts"],
+      rules: {
+        // MCP SDK lifecycle callbacks are properties, not EventTarget listeners.
+        "unicorn/prefer-add-event-listener": "off",
       },
     },
     {

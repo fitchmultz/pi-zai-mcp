@@ -2,7 +2,7 @@
 
 [Back to the README](../README.md)
 
-Pi manages your coding model, reasoning, streaming and conversation history. This extension adds research and vision tools alongside that model. The setup guidance below was recorded during the 2026-10-05 Z.AI documentation review; use the linked vendor documentation for current model availability and pricing.
+Pi manages your coding model, reasoning, streaming and conversation history. This extension adds research and vision tools alongside that model. The setup guidance below was recorded during the 2026-10-12 Z.AI documentation review; use the linked vendor documentation for current model availability and pricing.
 
 ## GLM-5.3 quality setup
 
@@ -32,5 +32,11 @@ For per-model startup reasoning without changing other providers, merge this int
   }
 }
 ```
+
+## Current plan behavior
+
+The [Coding Plan overview](https://docs.z.ai/devpack/overview) currently lists GLM-5.3 and Flash, with both 5-hour and weekly credit limits and 50% model-credit usage during off-peak periods. Older GLM-5.2/5.1 requests route to GLM-5.3, and GLM-4.7 requests to Flash; select the current model IDs explicitly rather than relying on those aliases. Shorter search summaries reduce response context, not the documented per-call MCP credit charge.
+
+The vision MCP is separate from native Flash image input. Its bundled client calls the vendor's standard endpoint with MCP identification headers; do not reroute it to Pi's coding-model endpoint or infer billing from the URL alone. The vendor describes vision MCP as a Coding Plan benefit, but offline payload checks do not verify account billing.
 
 Keep all five package resources enabled for full capability. The four tools connect lazily and make no paid calls at startup. Run `/zai-mcp-status` after loading. `lazy_not_connected_until_first_use` is expected before a service's first call.
