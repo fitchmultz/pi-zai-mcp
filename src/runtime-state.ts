@@ -41,13 +41,13 @@ export function getActiveServers(): ManagedServer[] {
   return [...globalState().activeServers];
 }
 
-export function warnOnceIfMissingApiKey(hasApiKeySource: () => boolean, message: string): void {
+export function warnOnceIfMissingApiKey(hasApiKeySource: () => boolean, warn: () => void): void {
   const state = globalState();
   if (state.warnedMissingApiKey || hasApiKeySource()) {
     return;
   }
   state.warnedMissingApiKey = true;
-  console.warn(message);
+  warn();
 }
 
 export function resetGlobalStateForTests(): void {

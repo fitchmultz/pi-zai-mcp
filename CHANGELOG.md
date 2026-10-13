@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.6 - 2026-10-12
+
+- Recover closed clients and expired HTTP sessions on the next explicit call without replaying failed tool requests; report connection state and the latest queued outcome accurately.
+- Finish cancellation/timeout disposal before the next same-server request, including real vision children interrupted during initialization; keep shutdown idempotent and bounded.
+- Discard unread vision stderr to prevent backpressure, and resolve every local vision source against the active Pi call's working directory while preserving remote URLs and explicit vendor configuration.
+- Route China credentials to all three BigModel HTTP services and use their platform as the vision default, retaining explicit vision-mode precedence and native Pi authentication ownership.
+- Bound oversized MCP/SDK failure messages with private full-output recovery files, preserve small error identity, and use native tool safety hints and UI warnings.
+- Refresh GLM-5.3/Flash, endpoint, quota, media-limit and MCP guidance against current vendor documentation. Retain the Pi 1.0.0 suggested floor, four curated tools, all vision actions and existing dependency versions.
+
 ## 0.2.5 - 2026-10-12
 
 - Override the vision server's nested MCP SDK with the patched direct SDK for repository and checked-out Git root installs; keep the vendor and public tool APIs unchanged.

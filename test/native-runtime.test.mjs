@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { access, chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { watch } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { InMemoryCredentialStore, validateToolArguments } from "@earendil-works/pi-ai";
 import {
   createAgentSession,
@@ -27,7 +29,7 @@ import { isRecord } from "../src/tools.ts";
 /** @typedef {import("@earendil-works/pi-coding-agent").AgentSession} NativeSession */
 /** @typedef {import("node:http").IncomingMessage} FixtureRequest */
 /** @typedef {import("node:http").ServerResponse} FixtureResponse */
-/** @typedef {Readonly<{calls: readonly Readonly<{auth?: string; params: Readonly<{name: string; arguments?: Readonly<Record<string, unknown>>}>}>[]; terminations: () => number}>} HttpFixture */
+/** @typedef {Readonly<{calls: readonly Readonly<{auth?: string; path?: string; sessionId?: string; params: Readonly<{name: string; arguments?: Readonly<Record<string, unknown>>}>}>[]; urls: readonly string[]; initializations: () => number; terminations: () => number}>} HttpFixture */
 
 /** @param {Readonly<{content: readonly Readonly<{type: string; text?: string}>[]}>} result */
 function textContent(result) {
@@ -53,7 +55,6 @@ async function createFixture(t) {
     OPENAI_API_KEY: "synthetic-other-secret",
     NODE_OPTIONS: "--no-warnings",
     Z_AI_VISION_MODEL_MAX_TOKENS: "42",
-    Z_AI_MODE: "ZAI",
     Z_AI_BASE_URL: "https://api.z.ai/api/coding/paas/v4",
   });
   for (const key of [
@@ -64,6 +65,9 @@ async function createFixture(t) {
     "Z_AI_VISION_MODEL_TEMPERATURE",
     "Z_AI_VISION_MODEL_TOP_P",
     "PLATFORM_MODE",
+    "Z_AI_MODE",
+    "Z_AI_MCP_TIMEOUT_MS",
+    "SERVER_NAME",
   ]) {
     delete process.env[key];
   }
@@ -81,8 +85,11 @@ async function createFixture(t) {
 
 /** @param {TestContext} t */
 async function searchFixture(t) {
-  /** @type {{auth: string | undefined; params: import("@modelcontextprotocol/sdk/types.js").CallToolRequest["params"]}[]} */
+  /** @type {{auth?: string; path?: string; sessionId?: string; params: import("@modelcontextprotocol/sdk/types.js").CallToolRequest["params"]}[]} */
   const calls = [];
+  /** @type {string[]} */
+  const urls = [];
+  let initializations = 0;
   let terminations = 0;
   /** @param {FixtureRequest} req @param {FixtureResponse} res */
   async function handle(req, res) {
@@ -110,6 +117,7 @@ async function searchFixture(t) {
     const message = JSONRPCRequestSchema.parse(rawMessage);
     let result;
     if (message.method === "initialize") {
+      initializations++;
       const initialize = InitializeRequestSchema.parse(message);
       result = {
         protocolVersion: initialize.params.protocolVersion,
@@ -118,10 +126,25 @@ async function searchFixture(t) {
       };
     } else {
       const call = CallToolRequestSchema.parse(message);
-      calls.push({ auth: req.headers.authorization, params: call.params });
+      calls.push({
+        auth: req.headers.authorization,
+        path: req.url,
+        sessionId: String(req.headers["mcp-session-id"]),
+        params: call.params,
+      });
       const query = call.params.arguments?.search_query;
+      if (query === "expired-session") {
+        res.writeHead(404).end("Owned expired MCP session");
+        return;
+      }
+      if (query === "http-error" || query === "large-http-error") {
+        res
+          .writeHead(500)
+          .end(query === "http-error" ? "Owned HTTP failure" : "private HTTP error".repeat(6000));
+        return;
+      }
       result = {
-        isError: query === "fixture-error",
+        isError: query === "fixture-error" || query === "large-error",
         content: [{ type: "text", text: "Local search result" }],
       };
       if (query === "fixture-error") {
@@ -131,9 +154,14 @@ async function searchFixture(t) {
           type: "text",
           text: "private search result",
         }));
+      } else if (query === "large-error") {
+        result.content = [{ type: "text", text: "private MCP error".repeat(6000) }];
       }
     }
-    res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "fixture-session" });
+    res.writeHead(200, {
+      "content-type": "application/json",
+      "mcp-session-id": `fixture-session-${initializations}`,
+    });
     res.end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }));
   }
   const fixture = createServer((req, res) => {
@@ -160,12 +188,11 @@ async function searchFixture(t) {
     } else {
       url = input.toString();
     }
-    assert.strictEqual(
-      url,
-      "https://api.z.ai/api/mcp/web_search_prime/mcp",
-      "only search may reach the fixture",
-    );
-    return originalFetch(`http://127.0.0.1:${address.port}/mcp`, options);
+    const target = new URL(url);
+    assert.ok(target.hostname === "api.z.ai" || target.hostname === "open.bigmodel.cn");
+    assert.match(target.pathname, /^\/api\/mcp\/(?:web_search_prime|web_reader|zread)\/mcp$/);
+    urls.push(url);
+    return originalFetch(`http://127.0.0.1:${address.port}${target.pathname}`, options);
   };
   t.after(async () => {
     globalThis.fetch = originalFetch;
@@ -174,7 +201,7 @@ async function searchFixture(t) {
       fixture.close(resolve);
     });
   });
-  return { calls, terminations: () => terminations };
+  return { calls, urls, initializations: () => initializations, terminations: () => terminations };
 }
 
 /** @param {Fixture} fixture */
@@ -282,11 +309,7 @@ async function verifySearch(session, notifications, fixture) {
       ),
     /Missing Z.ai API key/,
   );
-  assert.ok(
-    getActiveServers().every(
-      (entry) => entry.client === undefined && entry.transport === undefined,
-    ),
-  );
+  assert.ok(getActiveServers().every((entry) => entry.connection === undefined));
   process.env.Z_AI_API_KEY = "local-fixture-key";
   const result = await search.execute(
     "search-2",
@@ -316,9 +339,7 @@ async function verifySearch(session, notifications, fixture) {
     ],
   );
   const connected = getActiveServers().find((entry) => entry.id === "search");
-  assert.ok(
-    connected !== undefined && connected.client !== undefined && connected.transport !== undefined,
-  );
+  assert.ok(connected !== undefined && connected.connection !== undefined);
   await assert.rejects(
     () =>
       search.execute(
@@ -419,6 +440,166 @@ function prepareVisionFixture(session) {
   return vision;
 }
 
+/** @param {NativeSession} session @param {string} name @param {Readonly<Record<string, string>>} args @param {AbortSignal} [signal] @param {(result: Readonly<{content: readonly Readonly<{type: string; text?: string}>[]}>) => void} [onUpdate] */
+function invoke(session, name, args, signal, onUpdate) {
+  const tool = session.extensionRunner.getToolDefinition(name);
+  assert.ok(tool !== undefined);
+  const params = /** @type {unknown} */ (
+    validateToolArguments(tool, {
+      type: "toolCall",
+      id: "native-regression",
+      name,
+      arguments: args,
+    })
+  );
+  return tool.execute(
+    "native-regression",
+    params,
+    signal,
+    onUpdate,
+    session.extensionRunner.createToolContext("fixture-call", undefined),
+  );
+}
+
+/** @param {NativeSession} session @param {readonly string[]} notifications @param {string} [id] */
+async function readServerStatus(session, notifications, id = "search") {
+  await session.prompt("/zai-mcp-status");
+  const json = notifications.at(-1);
+  assert.ok(json !== undefined);
+  const entries = /** @type {unknown} */ (JSON.parse(json));
+  assert.ok(Array.isArray(entries));
+  const entry = /** @type {unknown} */ (
+    entries.find(/** @param {unknown} value */ (value) => isRecord(value) && value.id === id)
+  );
+  assert.ok(isRecord(entry));
+  return entry;
+}
+
+/** @param {NativeSession} session @param {readonly string[]} notifications @param {HttpFixture} http */
+async function verifyConnectionRecovery(session, notifications, http) {
+  const failed = await readServerStatus(session, notifications);
+  assert.ok(typeof failed.lastError === "string");
+  assert.match(failed.lastError, /Owned service failure/);
+  assert.strictEqual(
+    failed.connected,
+    true,
+    "an MCP tool failure does not invalidate a healthy connection",
+  );
+  await invoke(session, "z_ai_search", { query: "after-service-error" });
+  assert.strictEqual((await readServerStatus(session, notifications)).lastError, undefined);
+  const owner = getActiveServers().find((entry) => entry.id === "search");
+  assert.ok(owner?.connection !== undefined);
+  await owner.connection.client.close();
+  const closed = await readServerStatus(session, notifications);
+  assert.strictEqual(closed.connected, false);
+  assert.strictEqual(closed.connectionStatus, "disconnected");
+  const before = http.initializations();
+  await invoke(session, "z_ai_search", { query: "after-close" });
+  assert.strictEqual(http.initializations(), before + 1);
+  assert.strictEqual((await readServerStatus(session, notifications)).connected, true);
+  const previousSession = http.calls.at(-1)?.sessionId;
+  const previousCalls = http.calls.length;
+  await assert.rejects(
+    () => invoke(session, "z_ai_search", { query: "expired-session" }),
+    /404|expired/,
+  );
+  assert.strictEqual(http.calls.length, previousCalls + 1, "expired calls are not replayed");
+  const expired = await readServerStatus(session, notifications);
+  assert.strictEqual(expired.connectionStatus, "disconnected");
+  assert.strictEqual(expired.connected, false);
+  await invoke(session, "z_ai_search", { query: "after-expiry" });
+  assert.strictEqual(
+    http.initializations(),
+    before + 2,
+    "the next explicit call initializes without the expired ID",
+  );
+  assert.notStrictEqual(http.calls.at(-1)?.sessionId, previousSession);
+  assert.strictEqual((await readServerStatus(session, notifications)).lastError, undefined);
+}
+
+/** @param {NativeSession} session */
+async function verifyFailureOutput(session) {
+  const owner = getActiveServers().find((entry) => entry.id === "search");
+  assert.ok(owner?.connection !== undefined);
+  /** @type {Readonly<Error>[]} */
+  const sdkErrors = [];
+  Object.assign(owner.connection.client, {
+    onerror: /** @param {Readonly<Error>} error */ (error) => {
+      sdkErrors.push(error);
+    },
+  });
+  await assert.rejects(
+    () => invoke(session, "z_ai_search", { query: "http-error" }),
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.strictEqual(
+        error,
+        sdkErrors.at(-1),
+        "small SDK failures retain their original identity",
+      );
+      return true;
+    },
+  );
+  for (const scenario of [
+    { query: "large-error", full: "private MCP error".repeat(6000) },
+    { query: "large-http-error", full: "private HTTP error".repeat(6000) },
+  ]) {
+    /** @type {Error | undefined} */
+    let failure;
+    const rejected = assert.rejects(
+      () => invoke(session, "z_ai_search", { query: scenario.query }),
+      (error) => {
+        assert.ok(error instanceof Error);
+        failure = error;
+        return true;
+      },
+    );
+    const recovered = invoke(session, "z_ai_search", { query: "after-large-failure" });
+    await Promise.all([rejected, recovered]);
+    assert.strictEqual(owner.lastError, undefined, "the later queued success owns status");
+    assert.ok(failure !== undefined);
+    assert.ok(
+      Buffer.byteLength(failure.message) < 52_000,
+      "upstream failures cannot flood model context",
+    );
+    const file = /Full output saved to: ([^\]]+)\]/.exec(failure.message)?.[1];
+    assert.ok(file !== undefined, "oversized failures retain a full-output recovery path");
+    assert.ok(
+      (await readFile(file, "utf8")).endsWith(scenario.full),
+      "private saved failure preserves every original body byte",
+    );
+    if (process.platform !== "win32") {
+      assert.strictEqual((await stat(dirname(file))).mode & 0o777, 0o700);
+      assert.strictEqual((await stat(file)).mode & 0o777, 0o600);
+    }
+    await rm(dirname(file), { recursive: true, force: true });
+  }
+}
+
+/** @param {NativeSession} session @param {HttpFixture} http */
+async function verifyChinaHttp(session, http) {
+  delete process.env.Z_AI_API_KEY;
+  process.env.ZAI_CODING_CN_API_KEY = "synthetic-cn-credential";
+  await session.reload();
+  const start = http.urls.length;
+  await invoke(session, "z_ai_search", { query: "CN fixture" });
+  await invoke(session, "z_ai_reader", { url: "https://public.example.invalid/fixture" });
+  await invoke(session, "z_ai_zread", {
+    action: "read_file",
+    repo_name: "public/fixture",
+    file_path: "README.md",
+  });
+  assert.deepStrictEqual([...new Set(http.urls.slice(start))].toSorted(), [
+    "https://open.bigmodel.cn/api/mcp/web_reader/mcp",
+    "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp",
+    "https://open.bigmodel.cn/api/mcp/zread/mcp",
+  ]);
+  assert.ok(http.calls.slice(-3).every((call) => call.auth === "Bearer synthetic-cn-credential"));
+  delete process.env.ZAI_CODING_CN_API_KEY;
+  process.env.Z_AI_API_KEY = "synthetic-zai-credential";
+  await session.reload();
+}
+
 /** @param {NativeSession} session @param {Fixture} fixture @param {string} image */
 async function verifyVisionConfiguration(session, fixture, image) {
   const { logPath, childHome } = fixture;
@@ -433,8 +614,24 @@ async function verifyVisionConfiguration(session, fixture, image) {
       url: "https://api.z.ai/api/paas/v4/chat/completions",
     },
     {
+      name: "China credentials select BigModel vision",
+      env: { Z_AI_API_KEY: "", ZAI_CODING_CN_API_KEY: "synthetic-cn-credential" },
+      model: "glm-5.3-flash",
+      temperature: 1,
+      topP: 0.95,
+      url: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    },
+    {
+      name: "explicit vision mode overrides the credential default",
+      env: { Z_AI_API_KEY: "", ZAI_CODING_CN_API_KEY: "synthetic-cn-credential", Z_AI_MODE: "ZAI" },
+      model: "glm-5.3-flash",
+      temperature: 1,
+      topP: 0.95,
+      url: "https://api.z.ai/api/paas/v4/chat/completions",
+    },
+    {
       name: "explicit GLM-5.3 FlashX",
-      env: { Z_AI_VISION_MODEL: "glm-5.3-flashx" },
+      env: { Z_AI_VISION_MODEL: "glm-5.3-flashx", Z_AI_MODE: "" },
       model: "glm-5.3-flashx",
       temperature: 1,
       topP: 0.95,
@@ -480,7 +677,7 @@ async function verifyVisionConfiguration(session, fixture, image) {
     },
   ];
   for (const [index, scenario] of cases.entries()) {
-    Object.assign(process.env, scenario.env, { Z_AI_API_KEY: "synthetic-zai-credential" });
+    Object.assign(process.env, { Z_AI_API_KEY: "synthetic-zai-credential" }, scenario.env);
     if (index > 0) {
       await session.reload();
     }
@@ -489,7 +686,7 @@ async function verifyVisionConfiguration(session, fixture, image) {
       "vision-valid",
       {
         action: "analyze_image",
-        image_source: image,
+        image_source: `@${basename(image)}`,
         prompt: "Report the intercepted offline request",
       },
       undefined,
@@ -498,7 +695,10 @@ async function verifyVisionConfiguration(session, fixture, image) {
     );
     const receipt = /** @type {unknown} */ (JSON.parse(textContent(result)));
     assert.ok(isRecord(receipt));
-    assert.strictEqual(receipt.authorization, "Bearer synthetic-zai-credential");
+    assert.strictEqual(
+      receipt.authorization,
+      `Bearer ${scenario.env.ZAI_CODING_CN_API_KEY ?? "synthetic-zai-credential"}`,
+    );
     assert.deepStrictEqual(
       receipt.unrelatedEnvironment,
       [],
@@ -509,6 +709,9 @@ async function verifyVisionConfiguration(session, fixture, image) {
     assert.strictEqual(receipt.topP, scenario.topP, scenario.name);
     assert.strictEqual(receipt.url, scenario.url, scenario.name);
     assert.strictEqual(receipt.maxTokens, 42);
+    assert.deepStrictEqual(receipt.sources, [
+      `data:image/png;base64,${(await readFile(image)).toString("base64")}`,
+    ]);
     assert.strictEqual(
       receipt.logPath,
       logPath,
@@ -523,14 +726,159 @@ async function verifyVisionConfiguration(session, fixture, image) {
   );
 }
 
+/** @param {NativeSession} session @param {Fixture} fixture @param {string} image */
+async function verifyVisionSourceFields(session, fixture, image) {
+  const videoBytes = Buffer.from("synthetic offline media bytes");
+  await writeFile(join(fixture.root, "clip.mp4"), videoBytes);
+  const imageUrl = `data:image/png;base64,${(await readFile(image)).toString("base64")}`;
+  /** @type {readonly Readonly<{args: Readonly<Record<string, string>>; sources: readonly string[]}>[]} */
+  const cases = [
+    {
+      args: {
+        action: "ui_diff_check",
+        expected_image_source: "@image.png",
+        actual_image_source: "@./image.png",
+        prompt: "Compare offline inputs",
+      },
+      sources: [imageUrl, imageUrl],
+    },
+    {
+      args: {
+        action: "analyze_video",
+        video_source: "@clip.mp4",
+        prompt: "Inspect offline media path",
+      },
+      sources: [`data:video/mp4;base64,${videoBytes.toString("base64")}`],
+    },
+    {
+      args: {
+        action: "analyze_image",
+        image_source: "HTTPS://public.example.invalid/fixture.png",
+        prompt: "Preserve the remote URL",
+      },
+      sources: ["HTTPS://public.example.invalid/fixture.png"],
+    },
+  ];
+  for (const scenario of cases) {
+    const result = await invoke(session, "z_ai_vision", scenario.args);
+    const receipt = /** @type {unknown} */ (JSON.parse(textContent(result)));
+    assert.ok(isRecord(receipt));
+    assert.deepStrictEqual(receipt.sources, scenario.sources);
+  }
+}
+
+/** @param {string} file @param {string} marker */
+function waitForMarker(file, marker) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      observer.close();
+      reject(new Error(`Offline fixture did not reach ${marker}`));
+    }, 5000);
+    const check = () => {
+      readFile(file, "utf8")
+        .then((text) => {
+          if (text.includes(marker)) {
+            clearTimeout(timer);
+            observer.close();
+            resolve(undefined);
+          }
+        })
+        .catch(
+          /** @param {unknown} error */ (error) => {
+            clearTimeout(timer);
+            observer.close();
+            reject(
+              error instanceof Error ? error : new Error("Unable to read offline fixture marker"),
+            );
+          },
+        );
+    };
+    const observer = watch(file, check);
+    check();
+  });
+}
+
+/** @param {NativeSession} session @param {Fixture} fixture @param {string} image */
+async function verifyVisionCancellation(session, fixture, image) {
+  for (const { phase, mode } of [
+    { phase: "call", mode: "cancel" },
+    { phase: "call", mode: "timeout" },
+    { phase: "initialize", mode: "cancel" },
+    { phase: "initialize", mode: "timeout" },
+  ]) {
+    process.env.Z_AI_MCP_TIMEOUT_MS = "3000";
+    process.env.SERVER_NAME = `fixture-hold-${phase}-${mode}`;
+    await session.reload();
+    prepareVisionFixture(session);
+    const controller = new AbortController();
+    const marker = `hold-offline-fetch-${mode}`;
+    const pending = invoke(
+      session,
+      "z_ai_vision",
+      {
+        action: "analyze_image",
+        image_source: image,
+        prompt: marker,
+      },
+      controller.signal,
+    );
+    const rejected = assert.rejects(pending, /cancelled|timed out/i);
+    await waitForMarker(
+      fixture.logPath,
+      phase === "initialize"
+        ? `OFFLINE_INITIALIZE_STARTED ${process.env.SERVER_NAME}`
+        : `OFFLINE_FETCH_STARTED ${marker}`,
+    );
+    const owner = getActiveServers().find((entry) => entry.id === "vision");
+    assert.ok(owner?.connection?.transport instanceof StdioClientTransport);
+    const pid = owner.connection.transport.pid;
+    assert.ok(pid !== null);
+    const next = invoke(
+      session,
+      "z_ai_vision",
+      {
+        action: "analyze_image",
+        image_source: image,
+        prompt: "Next explicit request",
+      },
+      undefined,
+      (update) => {
+        if (textContent(update).startsWith("Calling ")) {
+          assert.throws(
+            () => process.kill(pid, 0),
+            { code: "ESRCH" },
+            "old child exits before the next queued request starts",
+          );
+        }
+      },
+    );
+    if (mode === "cancel") {
+      controller.abort();
+    }
+    const [, result] = await Promise.all([rejected, next]);
+    const receipt = /** @type {unknown} */ (JSON.parse(textContent(result)));
+    assert.ok(isRecord(receipt));
+    assert.notStrictEqual(
+      receipt.pid,
+      pid,
+      "the next request uses a fresh child, without replaying the failed call",
+    );
+    assert.strictEqual(
+      owner.lastError,
+      undefined,
+      "the successful explicit request clears the last error",
+    );
+  }
+  delete process.env.Z_AI_MCP_TIMEOUT_MS;
+  delete process.env.SERVER_NAME;
+  await session.reload();
+}
+
 /** @param {NativeSession} session @param {import("../src/servers.ts").ManagedServer} connected @param {() => number} terminations */
 async function verifyReload(session, connected, terminations) {
   await session.reload();
   assert.strictEqual(terminations(), 1, "reload terminates the connected MCP session");
-  assert.ok(
-    connected.client === undefined && connected.transport === undefined,
-    "reload releases the old transport",
-  );
+  assert.ok(connected.connection === undefined, "reload releases the old transport");
   assert.strictEqual(
     getActiveServers().length,
     4,
@@ -540,7 +888,7 @@ async function verifyReload(session, connected, terminations) {
 
 await test(
   "five native resources share lazy status and release servers on shutdown/reload",
-  { timeout: 30_000 },
+  { timeout: 60_000 },
   async (t) => {
     const fixture = await createFixture(t);
     const http = await searchFixture(t);
@@ -562,11 +910,27 @@ await test(
           },
         },
       });
+      assert.strictEqual(
+        notifications.filter((text) => text.includes("No Z.ai API key found")).length,
+        1,
+        "split resources emit one native UI warning",
+      );
       const connected = await verifySearch(session, notifications, http);
+      await t.test("closed and expired MCP sessions recover only on the next explicit call", () =>
+        verifyConnectionRecovery(session, notifications, http),
+      );
       await t.test(
         "native large output is private even under shared temp and umask 022",
         { skip: process.platform === "win32" },
         () => verifyPrivateOutput(session),
+      );
+      await t.test(
+        "large MCP and SDK failures stay bounded and private; small errors retain identity",
+        () => verifyFailureOutput(session),
+      );
+      await verifyReload(session, connected, http.terminations);
+      await t.test("China credentials route all three HTTP services to BigModel", () =>
+        verifyChinaHttp(session, http),
       );
       const image = join(fixture.root, "image.png");
       await writeFile(
@@ -577,10 +941,17 @@ await test(
         ),
       );
       await t.test(
-        "real vision child isolates credentials and honors model sampling and endpoint precedence",
+        "real vision child discards high-volume stderr, resolves session paths and honors credential/model/endpoint precedence",
         () => verifyVisionConfiguration(session, fixture, image),
       );
-      await verifyReload(session, connected, http.terminations);
+      await t.test(
+        "vision resolves comparison/video paths per call and preserves remote URLs",
+        () => verifyVisionSourceFields(session, fixture, image),
+      );
+      await t.test(
+        "vision initialize/call cancellation and timeout retire children before the next queued call",
+        () => verifyVisionCancellation(session, fixture, image),
+      );
       await t.test(
         "placeholder vision credential cannot fall back to another provider",
         async () => {
