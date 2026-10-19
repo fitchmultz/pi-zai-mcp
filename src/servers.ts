@@ -3,16 +3,42 @@ import type { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/cl
 import type { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const EXTENSION_NAME = "pi-zai-mcp";
 const VISION_MCP_PACKAGE = "@z_ai/mcp-server";
 const VISION_MCP_BIN = "zai-mcp-server";
 const GLM_VISION_DEFAULT_MODELS: ReadonlySet<string> = new Set(["glm-5.3-flash", "glm-5.3-flashx"]);
+const GLOBAL_VISION_MODES = new Set(["Z_AI", "ZAI", "Z"]);
+const CHINA_VISION_MODES = new Set(["ZHIPU_AI", "ZHIPUAI", "ZHIPU", "BIGMODEL"]);
 const require = createRequire(import.meta.url);
 
 export type ServerId = "search" | "reader" | "zread" | "vision";
 export type ZaiPlatform = "ZAI" | "ZHIPU";
 type ServerKind = "http" | "stdio";
+
+export function visionCompletionsUrl(
+  env: Readonly<Record<string, string>>,
+  platform: ZaiPlatform,
+): string {
+  let mode: string = platform;
+  if (env.Z_AI_MODE !== undefined && env.Z_AI_MODE !== "") {
+    mode = env.Z_AI_MODE;
+  }
+  if (env.PLATFORM_MODE !== undefined && env.PLATFORM_MODE !== "") {
+    mode = env.PLATFORM_MODE;
+  }
+  let baseUrl = env.Z_AI_BASE_URL;
+  if (baseUrl === undefined || baseUrl === "") {
+    baseUrl = "https://open.bigmodel.cn/api/paas/v4/";
+  }
+  if (GLOBAL_VISION_MODES.has(mode)) {
+    baseUrl = "https://api.z.ai/api/paas/v4/";
+  } else if (CHINA_VISION_MODES.has(mode)) {
+    baseUrl = "https://open.bigmodel.cn/api/paas/v4/";
+  }
+  return `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+}
 
 export const ALL_SERVER_IDS = [
   "search",
@@ -105,11 +131,24 @@ function visionEnvironment(): Record<string, string> {
     env.Z_AI_BASE_URL = `${env.Z_AI_BASE_URL.replace(/\/+$/, "")}/`;
   }
   const model = env.Z_AI_VISION_MODEL ?? "";
-  if (model === "" || GLM_VISION_DEFAULT_MODELS.has(model)) {
-    env.Z_AI_VISION_MODEL_TEMPERATURE ??= "1";
-    env.Z_AI_VISION_MODEL_TOP_P ??= "0.95";
+  return {
+    ...env,
+    ...visionModelSettings(model, process.env.Z_AI_VISION_REASONING_EFFORT),
+  };
+}
+
+function visionModelSettings(model: string, effort: string | undefined): Record<string, string> {
+  if (model !== "" && !GLM_VISION_DEFAULT_MODELS.has(model)) {
+    return {};
   }
-  return env;
+  if (effort !== undefined && effort !== "low" && effort !== "high" && effort !== "max") {
+    throw new Error("Z_AI_VISION_REASONING_EFFORT must be one of: low, high, max.");
+  }
+  return {
+    Z_AI_VISION_MODEL_TEMPERATURE: process.env.Z_AI_VISION_MODEL_TEMPERATURE ?? "1",
+    Z_AI_VISION_MODEL_TOP_P: process.env.Z_AI_VISION_MODEL_TOP_P ?? "0.95",
+    ...(effort === undefined ? {} : { Z_AI_VISION_REASONING_EFFORT: effort }),
+  };
 }
 
 function resolveVisionServerCommand(): { command: string; args: string[] } {
@@ -133,7 +172,11 @@ function resolveVisionServerCommand(): { command: string; args: string[] } {
 
   return {
     command: process.execPath,
-    args: [resolve(packageRoot, binPath)],
+    args: [
+      "--import",
+      fileURLToPath(new URL("./vision-fetch.mjs", import.meta.url)),
+      resolve(packageRoot, binPath),
+    ],
   };
 }
 
