@@ -132,6 +132,8 @@ globalThis.fetch = (input, options) => {
     temperature: body.temperature,
     topP: body.top_p,
     logPath: process.env.ZAI_MCP_LOG_PATH ?? null,
+    thinking: "thinking" in body ? body.thinking : undefined,
+    reasoningEffort: "reasoning_effort" in body ? body.reasoning_effort : undefined,
   };
   return Promise.resolve(
     Response.json({ choices: [{ message: { content: JSON.stringify(receipt) } }] }),

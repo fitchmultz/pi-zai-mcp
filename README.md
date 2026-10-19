@@ -45,7 +45,7 @@ Vision needs a local file path or HTTP/HTTPS URL. Relative paths resolve against
 
 Zread can reject repositories that Z.AI has not indexed. Real tool calls require network access and consume your plan allowance. Check [Z.AI's usage policy](https://docs.z.ai/devpack/usage-policy) for current pricing.
 
-Vision defaults to `glm-5.3-flash` with a 131,072-token output ceiling. Large outputs can increase cost. Set `Z_AI_VISION_MODEL_MAX_TOKENS` to reduce this ceiling.
+Vision defaults to `glm-5.3-flash` with a 131,072-token output ceiling and `high` reasoning effort (thinking remains enabled). Set `Z_AI_VISION_REASONING_EFFORT` to `low`, `high`, or `max` for Flash/FlashX; higher effort can increase response time and token use. Large outputs can increase cost; set `Z_AI_VISION_MODEL_MAX_TOKENS` to reduce the output ceiling.
 
 If a call fails, run `/zai-mcp-status`. Check `lastError`, your API key, plan entitlement, and network connection. See the [configuration reference](docs/reference.md#configure) for timeouts and vision settings.
 
@@ -53,7 +53,7 @@ If a call fails, run `/zai-mcp-status`. Check `lastError`, your API key, plan en
 
 Pi extensions run with your user permissions. Review the code before installation. These tools send requests and visual input to Z.AI.
 
-The extension stores no credentials. It passes only the selected Z.AI key, safe platform variables, and allowed settings to the vision server.
+The extension stores no credentials. It passes only the selected Z.AI key, safe platform variables, and allowed settings to the vision server. The effort adapter runs only in that isolated child and only changes the configured Flash/FlashX Chat Completions request.
 
 The vision server logs prompts and image paths under `~/.zai` by default. Its stderr is discarded to prevent undrained logging from blocking or filling memory; this does not disable vendor file logging. Set `ZAI_MCP_LOG_PATH` to a private or non-persisting destination when needed. Cancellation closes the local vision process, but cannot guarantee stopped remote computation or billing. Treat retrieved pages and repository text as untrusted content.
 

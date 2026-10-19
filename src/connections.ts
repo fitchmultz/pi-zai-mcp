@@ -7,7 +7,12 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { createRequire } from "node:module";
 import { getServiceAuth } from "./auth.ts";
-import { httpServerUrl, type ManagedServer, type Connection } from "./servers.ts";
+import {
+  httpServerUrl,
+  visionCompletionsUrl,
+  type ManagedServer,
+  type Connection,
+} from "./servers.ts";
 import type { CuratedRequest, Registry } from "./register-tool.ts";
 import { isRecord } from "./tools.ts";
 
@@ -176,19 +181,23 @@ async function connect(
     if (owner.command === undefined || owner.command.length === 0) {
       throw new Error(`Missing command for ${owner.id}`);
     }
+    const env: Record<string, string> = {
+      ...owner.env,
+      Z_AI_MODE:
+        owner.env?.Z_AI_MODE === undefined || owner.env.Z_AI_MODE.length === 0
+          ? auth.platform
+          : owner.env.Z_AI_MODE,
+      Z_AI_API_KEY: auth.key,
+    };
+    if (owner.id === "vision") {
+      env.Z_AI_VISION_CHAT_COMPLETIONS_URL = visionCompletionsUrl(env, auth.platform);
+    }
     return {
       client,
       transport: new StdioClientTransport({
         command: owner.command,
         args: owner.args,
-        env: {
-          ...owner.env,
-          Z_AI_MODE:
-            owner.env?.Z_AI_MODE === undefined || owner.env.Z_AI_MODE.length === 0
-              ? auth.platform
-              : owner.env.Z_AI_MODE,
-          Z_AI_API_KEY: auth.key,
-        },
+        env,
         stderr: "ignore",
       }),
     };

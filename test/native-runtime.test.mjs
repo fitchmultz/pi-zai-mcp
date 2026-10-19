@@ -22,6 +22,7 @@ import {
   JSONRPCRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { getActiveServers } from "../src/runtime-state.ts";
+import { createServers } from "../src/servers.ts";
 import { isRecord } from "../src/tools.ts";
 
 /** @typedef {Readonly<{root: string; agentDir: string; childHome: string; logPath: string}>} Fixture */
@@ -64,6 +65,7 @@ async function createFixture(t) {
     "Z_AI_VISION_MODEL",
     "Z_AI_VISION_MODEL_TEMPERATURE",
     "Z_AI_VISION_MODEL_TOP_P",
+    "Z_AI_VISION_REASONING_EFFORT",
     "PLATFORM_MODE",
     "Z_AI_MODE",
     "Z_AI_MCP_TIMEOUT_MS",
@@ -603,12 +605,13 @@ async function verifyChinaHttp(session, http) {
 /** @param {NativeSession} session @param {Fixture} fixture @param {string} image */
 async function verifyVisionConfiguration(session, fixture, image) {
   const { logPath, childHome } = fixture;
-  /** @type {readonly Readonly<{name: string; env: Readonly<Record<string, string>>; model: string; temperature: number; topP: number; url: string}>[]} */
+  /** @type {readonly Readonly<{name: string; env: Readonly<Record<string, string>>; model: string; reasoningEffort: string | undefined; temperature: number; topP: number; url: string}>[]} */
   const cases = [
     {
       name: "default GLM-5.3 Flash",
       env: {},
       model: "glm-5.3-flash",
+      reasoningEffort: "high",
       temperature: 1,
       topP: 0.95,
       url: "https://api.z.ai/api/paas/v4/chat/completions",
@@ -617,6 +620,7 @@ async function verifyVisionConfiguration(session, fixture, image) {
       name: "China credentials select BigModel vision",
       env: { Z_AI_API_KEY: "", ZAI_CODING_CN_API_KEY: "synthetic-cn-credential" },
       model: "glm-5.3-flash",
+      reasoningEffort: "high",
       temperature: 1,
       topP: 0.95,
       url: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
@@ -625,14 +629,20 @@ async function verifyVisionConfiguration(session, fixture, image) {
       name: "explicit vision mode overrides the credential default",
       env: { Z_AI_API_KEY: "", ZAI_CODING_CN_API_KEY: "synthetic-cn-credential", Z_AI_MODE: "ZAI" },
       model: "glm-5.3-flash",
+      reasoningEffort: "high",
       temperature: 1,
       topP: 0.95,
       url: "https://api.z.ai/api/paas/v4/chat/completions",
     },
     {
       name: "explicit GLM-5.3 FlashX",
-      env: { Z_AI_VISION_MODEL: "glm-5.3-flashx", Z_AI_MODE: "" },
+      env: {
+        Z_AI_VISION_MODEL: "glm-5.3-flashx",
+        Z_AI_VISION_REASONING_EFFORT: "low",
+        Z_AI_MODE: "",
+      },
       model: "glm-5.3-flashx",
+      reasoningEffort: "low",
       temperature: 1,
       topP: 0.95,
       url: "https://api.z.ai/api/paas/v4/chat/completions",
@@ -641,14 +651,19 @@ async function verifyVisionConfiguration(session, fixture, image) {
       name: "custom GLM-5.3 prefix retains vendor defaults",
       env: { Z_AI_VISION_MODEL: "glm-5.3-custom" },
       model: "glm-5.3-custom",
+      reasoningEffort: undefined,
       temperature: 0.8,
       topP: 0.6,
       url: "https://api.z.ai/api/paas/v4/chat/completions",
     },
     {
       name: "other model defaults",
-      env: { Z_AI_VISION_MODEL: "synthetic-configured-model" },
+      env: {
+        Z_AI_VISION_MODEL: "synthetic-configured-model",
+        Z_AI_VISION_REASONING_EFFORT: "invalid-ignored-for-unsupported-model",
+      },
       model: "synthetic-configured-model",
+      reasoningEffort: undefined,
       temperature: 0.8,
       topP: 0.6,
       url: "https://api.z.ai/api/paas/v4/chat/completions",
@@ -657,6 +672,7 @@ async function verifyVisionConfiguration(session, fixture, image) {
       name: "explicit overrides and custom endpoint",
       env: {
         Z_AI_VISION_MODEL: "glm-5.3-flash",
+        Z_AI_VISION_REASONING_EFFORT: "max",
         Z_AI_VISION_MODEL_TEMPERATURE: "0.7",
         Z_AI_VISION_MODEL_TOP_P: "0.9",
         PLATFORM_MODE: "CUSTOM",
@@ -665,18 +681,23 @@ async function verifyVisionConfiguration(session, fixture, image) {
       model: "glm-5.3-flash",
       temperature: 0.7,
       topP: 0.9,
+      reasoningEffort: "max",
       url: "https://vision.example.test/v4/chat/completions",
     },
     {
       name: "empty custom endpoint retains vendor fallback",
       env: { Z_AI_BASE_URL: "" },
       model: "glm-5.3-flash",
+      reasoningEffort: "high",
       temperature: 0.7,
       topP: 0.9,
       url: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
     },
   ];
   for (const [index, scenario] of cases.entries()) {
+    if (scenario.env.Z_AI_VISION_REASONING_EFFORT === undefined) {
+      delete process.env.Z_AI_VISION_REASONING_EFFORT;
+    }
     Object.assign(process.env, { Z_AI_API_KEY: "synthetic-zai-credential" }, scenario.env);
     if (index > 0) {
       await session.reload();
@@ -705,6 +726,8 @@ async function verifyVisionConfiguration(session, fixture, image) {
       "unrelated credentials and Node hooks must not reach the child",
     );
     assert.strictEqual(receipt.model, scenario.model, scenario.name);
+    assert.deepStrictEqual(receipt.thinking, { type: "enabled" }, scenario.name);
+    assert.strictEqual(receipt.reasoningEffort, scenario.reasoningEffort, scenario.name);
     assert.strictEqual(receipt.temperature, scenario.temperature, scenario.name);
     assert.strictEqual(receipt.topP, scenario.topP, scenario.name);
     assert.strictEqual(receipt.url, scenario.url, scenario.name);
@@ -718,6 +741,15 @@ async function verifyVisionConfiguration(session, fixture, image) {
       "the vendor retains the selected private log destination",
     );
   }
+  process.env.Z_AI_VISION_MODEL = "glm-5.3-flash";
+  process.env.Z_AI_VISION_REASONING_EFFORT = "unsupported";
+  assert.throws(
+    () => createServers(["vision"]),
+    /Z_AI_VISION_REASONING_EFFORT must be one of: low, high, max\./,
+    "unsupported effort is rejected before a vision child starts",
+  );
+  delete process.env.Z_AI_VISION_MODEL;
+  delete process.env.Z_AI_VISION_REASONING_EFFORT;
   assert.match(await readFile(logPath, "utf8"), /Report the intercepted offline request/);
   await assert.rejects(
     () => access(join(childHome, ".zai")),
