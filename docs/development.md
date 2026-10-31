@@ -155,7 +155,7 @@ The regression suite runs the real installed Oxlint, compiler and policy CLIs ag
 
 The quality rollout's diagnostic reductions come from explicit native/semantic allowances and corrected test limits; source-quality changes add checked-JavaScript contracts, clearer callback returns and a cohesive metadata/lifecycle separation. They do not claim new service-runtime bug fixes. Previously verified 0.2.2 output/privacy and vision fixes are described separately in the changelog.
 
-This is a source-only Pi package: the native loader consumes TypeScript directly. `npm run build` validates the publishable source package with `npm pack --dry-run`; there is no compiled bundle or generated-code pipeline. Independent host qualification packs and executes the actual artifact. The existing compatibility workflow also runs a read-only `quality` job invoking the same `npm run check`; formatting and policy checks are not optional side workflows.
+This is a source-only Pi package: the native loader consumes TypeScript directly. `npm run build` validates the publishable source package with `npm pack --dry-run`; there is no compiled bundle or generated-code pipeline. Independent host qualification packs and executes the actual artifact. The compatibility workflow's `quality` job runs `npm run ci`, which includes `npm run check` and the production audit; formatting and policy checks are not optional side workflows.
 
 ## Automatic npm releases (maintainers)
 
