@@ -1,0 +1,98 @@
+name: Release consumer audit
+
+on:
+  workflow_call:
+    inputs:
+      automation-ref:
+        description: Exact reviewed shared automation revision
+        required: true
+        type: string
+      source-ref:
+        description: Exact candidate commit
+        required: true
+        type: string
+      release-source:
+        description: Original main commit represented by the candidate
+        required: true
+        type: string
+      official-version:
+        description: Official Pi version selected for the candidate
+        required: true
+        type: string
+      fork-ref:
+        description: Maintained Pi fork commit selected for the candidate
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  audit:
+    name: Audit a fresh consumer of the retained package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: fitchmultz/.github
+          ref: ${{ inputs.automation-ref }}
+          path: automation
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          check-latest: true
+          package-manager-cache: false
+      - name: Use the reviewed npm
+        run: |
+          PM="$(node -p 'require("./automation/package.json").packageManager')"
+          npm exec --yes --package="$PM" -- npm install --global "$PM"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-candidate-${{ inputs.source-ref }}
+          path: ${{ runner.temp }}/npm-candidate
+      - name: Verify and audit the retained candidate
+        env:
+          SOURCE_REF: ${{ inputs.source-ref }}
+          RELEASE_SOURCE: ${{ inputs.release-source }}
+          OFFICIAL_VERSION: ${{ inputs.official-version }}
+          FORK_REF: ${{ inputs.fork-ref }}
+        run: |
+          node automation/scripts/npm-release.mjs verify \
+            --artifact "$RUNNER_TEMP/npm-candidate" --source-ref "$SOURCE_REF" \
+            --release-source "$RELEASE_SOURCE" --official-version "$OFFICIAL_VERSION" --fork-ref "$FORK_REF"
+          candidate="$RUNNER_TEMP/npm-candidate"
+          evidence="$RUNNER_TEMP/zai-consumer-evidence"
+          consumer="$RUNNER_TEMP/zai-consumer"
+          mkdir -p "$evidence" "$consumer"
+          cp "$candidate/release.json" "$evidence/candidate.json"
+          filename="$(node -p 'require(process.env.RUNNER_TEMP + "/npm-candidate/release.json").filename')"
+          sha256="$(node -p 'require(process.env.RUNNER_TEMP + "/npm-candidate/release.json").sha256')"
+          printf '{"private":true}\n' > "$consumer/package.json"
+          cd "$consumer"
+          npm install --ignore-scripts --no-audit --no-fund "$candidate/$filename"
+          cp package-lock.json "$evidence/package-lock.json"
+          audit_status=0
+          npm audit --omit=dev --json > "$evidence/audit.json" || audit_status=$?
+          if [ "$audit_status" -gt 1 ] || ! jq -e \
+            '(.auditReportVersion == 2) and ((.metadata.vulnerabilities | type) == "object") and ((.vulnerabilities | type) == "object") and (has("error") | not)' \
+            "$evidence/audit.json" > /dev/null; then
+            echo "The fresh consumer audit did not complete." >&2
+            exit 1
+          fi
+          {
+            printf '## Fresh npm consumer audit\n\nCandidate SHA-256: %s\n\n' "$sha256"
+            printf 'npm audit exit: %s. Advisory findings are reported here; the separate repository production audit remains a blocking gate.\n\n' "$audit_status"
+            jq -r '.metadata.vulnerabilities | to_entries[] | "- \(.key): \(.value)"' "$evidence/audit.json"
+            printf '\nAffected packages:\n\n'
+            jq -r '.vulnerabilities | to_entries[] | "- \(.key): \(.value.severity)"' "$evidence/audit.json"
+            printf '\nThe complete audit report and resolved consumer lock are retained as an artifact.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain the consumer audit
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zai-consumer-audit-${{ inputs.source-ref }}
+          path: ${{ runner.temp }}/zai-consumer-evidence
+          if-no-files-found: warn
