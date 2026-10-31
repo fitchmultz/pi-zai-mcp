@@ -6,7 +6,7 @@ pi-zai-mcp gives Pi four Z.AI tools: web search, page reader, public repository 
 
 ## Install and start
 
-Use [Pi](https://pi.dev) 1.0.0 or later. You need Node.js 22.19 or newer and a Z.AI API key with a compatible GLM Coding Plan.
+Use [Pi](https://pi.dev) and Node.js; see the [compatibility requirements](docs/development.md#host-compatibility). You also need a Z.AI API key with a compatible GLM Coding Plan.
 
 ```bash
 pi install npm:pi-zai-mcp
