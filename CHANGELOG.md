@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.7 - 2026-10-31
+
+- Default GLM-5.3 Flash/FlashX vision requests to high reasoning effort while keeping thinking enabled; allow `low`, `high` or `max` through `Z_AI_VISION_REASONING_EFFORT`.
+- Refresh locked runtime dependencies, use a verified patched Zod release for root vision-server installs, and clarify where to find host compatibility requirements.
+
 ## 0.2.6 - 2026-10-12
 
 - Recover closed clients and expired HTTP sessions on the next explicit call without replaying failed tool requests; report connection state and the latest queued outcome accurately.

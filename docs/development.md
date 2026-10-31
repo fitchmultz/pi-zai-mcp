@@ -14,7 +14,7 @@ pi -e .
 
 ## Host compatibility
 
-Pi **1.0.0** remains the suggested support floor. Host runtime packages remain optional wildcard peers rather than hard peer/engines pins. Required qualification targets are the latest stable official Pi and latest maintained fork `main`, resolving version/commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not validation targets.
+Pi **1.0.0** remains the suggested support floor; Node.js **22.19.0** or later is required. Host runtime packages remain optional wildcard peers rather than hard peer/engines pins. Required qualification targets are the latest stable official Pi and latest maintained fork `main`, resolving version/commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not validation targets.
 
 ## Verify this repo
 
@@ -42,32 +42,59 @@ Audit both the repository's production graph and a fresh npm consumer of
 `npm pack`. The direct SDK floor and scoped vision-server override install SDK
 1.32.1 throughout this repository's locked production graph, and the lockfile
 also updates `proxy-addr` to 2.0.8. `npm run ci` retains its strict production
-audit.
+audit; the release workflow runs this repository gate before publishing.
 
-**Known upstream residual:** the latest `@z_ai/mcp-server@0.1.5` still pins MCP
-SDK 1.26.0, affected by
+**Known upstream residual:** `@z_ai/mcp-server@0.1.5` pins MCP
+SDK 1.26.0, affected by multiple advisories including
 [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h).
 npm applies overrides only at an installation root. This repo's lockfile and
 overrides protect root installs, including Pi's checked-out Git package, but
 not npm consumers installing this package as a dependency. Those consumers
-still receive the vendor's pinned SDK and report the SDK advisory propagated
-through the vendor and `pi-zai-mcp`; a clean repository audit does not mean a
-clean downstream graph.
+still receive the vendor's pinned SDK; npm reports its advisories propagated
+through the vendor and `pi-zai-mcp`, and separately reports a vulnerable nested
+`@hono/node-server`. A clean repository audit does not mean a clean downstream
+graph.
 
-Until the vendor updates its SDK, npm consumers can add this scoped override
-to their own root manifest and then regenerate their lockfile:
+The vendor also requires Zod 3, which is affected by
+[GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+There is no patched Zod 3 release. The repository's scoped override selects
+patched Zod 4 for the vision server at the installation root. The eight curated
+vision actions and invalid-input handling have been checked against that graph.
+Fresh npm consumers without their own override still receive the vendor's
+Zod 3 and report its advisory. The vendor's tool input schemas use fixed string
+and enum fields rather than the constrained collections in that advisory; this
+observation does not certify the nested SDK or other consumers. The newer
+vendor release still requires Zod 3 and SDK 1.26.0.
+
+Until the vendor updates its SDK and Zod dependencies, npm consumers can add
+these scoped overrides to their own root manifest and then regenerate their
+lockfile. For a Pi-managed project package, that manifest is
+`.pi/npm/package.json`; for a global package, it is `npm/package.json` under
+the Pi agent directory:
 
 ```json
 {
   "overrides": {
     "@z_ai/mcp-server": {
-      "@modelcontextprotocol/sdk": "^1.32.1"
+      "@modelcontextprotocol/sdk": "^1.32.1",
+      "zod": "4.6.7"
     }
   }
 }
 ```
 
-Remove the scoped override when the vendor releases a patched SDK dependency.
+An existing npm lockfile can retain the old nested SDK after adding overrides.
+For a Pi-managed npm package, reinstall its existing source from the npm root
+without changing Pi's per-resource settings, then verify the resolved graph:
+
+```bash
+spec="$(node -p 'require("./package.json").dependencies["pi-zai-mcp"]')"
+npm uninstall pi-zai-mcp && npm install "pi-zai-mcp@$spec"
+npm ls @z_ai/mcp-server @modelcontextprotocol/sdk zod
+npm audit --omit=dev
+```
+
+Remove the scoped overrides when the vendor releases patched dependencies.
 
 The affected OAuth client path is not used here. The vendor's `build/index.js`
 runs `McpServer` with `StdioServerTransport`; the advisory explicitly excludes
@@ -128,7 +155,7 @@ The regression suite runs the real installed Oxlint, compiler and policy CLIs ag
 
 The quality rollout's diagnostic reductions come from explicit native/semantic allowances and corrected test limits; source-quality changes add checked-JavaScript contracts, clearer callback returns and a cohesive metadata/lifecycle separation. They do not claim new service-runtime bug fixes. Previously verified 0.2.2 output/privacy and vision fixes are described separately in the changelog.
 
-This is a source-only Pi package: the native loader consumes TypeScript directly. `npm run build` validates the publishable source package with `npm pack --dry-run`; there is no compiled bundle or generated-code pipeline. Independent host qualification packs and executes the actual artifact. The existing compatibility workflow also runs a read-only `quality` job invoking the same `npm run check`; formatting and policy checks are not optional side workflows.
+This is a source-only Pi package: the native loader consumes TypeScript directly. `npm run build` validates the publishable source package with `npm pack --dry-run`; there is no compiled bundle or generated-code pipeline. Independent host qualification packs and executes the actual artifact. The compatibility workflow's `quality` job runs `npm run ci`, which includes `npm run check` and the production audit; formatting and policy checks are not optional side workflows.
 
 ## Automatic npm releases (maintainers)
 
