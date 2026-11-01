@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.9 - 2026-11-01
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Use direct Flash for necessary release remediation (#52) ([4f908e2](https://github.com/fitchmultz/pi-zai-mcp/commit/4f908e2be88c15cf8cf94061bb08d0bc7e2a48a4))
+
+### What's Changed
+
+- Use direct Flash for necessary release remediation by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/52
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.8...v0.2.9
+
 ## 0.2.8 - 2026-11-01
 
 <!-- npm-release:unreleased:start -->
