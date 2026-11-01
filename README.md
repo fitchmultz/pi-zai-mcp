@@ -14,6 +14,8 @@ export Z_AI_API_KEY="your_z_ai_api_key"
 pi
 ```
 
+The upstream npm dependency has outstanding advisories. See [dependency security](docs/development.md#dependency-security) for affected installs and root overrides.
+
 You can also use a key stored through Pi's `/login` command. The extension accepts `ZAI_API_KEY` and `ZAI_CODING_CN_API_KEY`. Environment variables take precedence over stored keys. Global keys use Z.AI; the China alias, `zai-coding-cn` login and BigModel provider aliases use the separate BigModel services.
 
 In Pi, enter:
