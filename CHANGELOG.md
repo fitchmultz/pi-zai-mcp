@@ -10,8 +10,8 @@ All notable changes to this project are documented here.
 - Automate qualified npm patch releases (#50) ([616fd05](https://github.com/fitchmultz/pi-zai-mcp/commit/616fd053e3263e500f32f288b718ff0051d8cf5b))
 
 ### What's Changed
-* Automate qualified npm patch releases by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/50
 
+- Automate qualified npm patch releases by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/50
 
 **Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.7...v0.2.8
 
