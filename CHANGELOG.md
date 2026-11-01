@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.8 - 2026-11-01
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Automate qualified npm patch releases (#50) ([616fd05](https://github.com/fitchmultz/pi-zai-mcp/commit/616fd053e3263e500f32f288b718ff0051d8cf5b))
+
+### What's Changed
+* Automate qualified npm patch releases by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/50
+
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.7...v0.2.8
+
 ## 0.2.7 - 2026-10-31
 
 - Default GLM-5.3 Flash/FlashX vision requests to high reasoning effort while keeping thinking enabled; allow `low`, `high` or `max` through `Z_AI_VISION_REASONING_EFFORT`.
