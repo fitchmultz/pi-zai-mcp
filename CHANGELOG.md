@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.10 - 2026-11-02
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Raise the Pi floor to 1.5.0 (#54) ([4bdd23f](https://github.com/fitchmultz/pi-zai-mcp/commit/4bdd23f4734f40ca9df83be8a1d32fa07f69aff8))
+
+### What's Changed
+
+- Raise the Pi floor to 1.5.0 by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/54
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.9...v0.2.10
+
 ## 0.2.9 - 2026-11-01
 
 <!-- npm-release:unreleased:start -->
