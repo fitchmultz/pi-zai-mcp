@@ -1,9 +1,4 @@
-import {
-  highlightCode,
-  keyHint,
-  type Theme,
-  type ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
+import { highlightCode, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import type { TSchema } from "typebox";
 import { resolve } from "node:path";
@@ -115,20 +110,22 @@ function resultHeader(details: RenderDetails, failed: boolean, theme: ResultThem
   return `${status} ${theme.fg("dim", `${details.server ?? "z_ai"}/${details.tool ?? "tool"}`)}`;
 }
 
+type CuratedRenderContext = Readonly<
+  Pick<
+    Parameters<NonNullable<ToolDefinition<TSchema, unknown, unknown>["renderResult"]>>[3],
+    "args" | "isError" | "keyHint"
+  >
+>;
+
 export function renderCuratedResult(
   result: TextResult,
   options: Readonly<{ expanded?: boolean; isPartial?: boolean }>,
   theme: ResultTheme,
-  context?: Readonly<
-    Pick<
-      Parameters<NonNullable<ToolDefinition<TSchema, unknown, unknown>["renderResult"]>>[3],
-      "args" | "isError"
-    >
-  >,
+  context: CuratedRenderContext,
 ): Text {
   const details = resultDetails(result.details);
   if (options.isPartial === true) {
-    const { target, message } = renderProgress(result, details, context?.args);
+    const { target, message } = renderProgress(result, details, context.args);
     return new Text(
       `${theme.fg("warning", "running")} ${theme.fg("dim", target)}\n${theme.fg("toolOutput", message)}`,
       0,
@@ -137,17 +134,23 @@ export function renderCuratedResult(
   }
   return renderFinishedResult(result, details, {
     expanded: options.expanded === true,
-    failed: context?.isError === true,
+    failed: context.isError,
     theme,
+    keyHint: context.keyHint,
   });
 }
 
 function renderFinishedResult(
   result: TextResult,
   details: RenderDetails,
-  view: Readonly<{ expanded: boolean; failed: boolean; theme: ResultTheme }>,
+  view: Readonly<{
+    expanded: boolean;
+    failed: boolean;
+    theme: ResultTheme;
+    keyHint: CuratedRenderContext["keyHint"];
+  }>,
 ): Text {
-  const { expanded, failed, theme } = view;
+  const { expanded, failed, theme, keyHint } = view;
   const { text, language } = displayText(firstTextContent(result));
   const lineLimit = expanded ? 80 : 8;
   const byteLimit = expanded ? 24_000 : 4_000;
