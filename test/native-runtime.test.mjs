@@ -368,6 +368,9 @@ async function verifySearch(session, notifications, fixture) {
     isError: true,
     durationMs: undefined,
     outputPad: 1,
+    keyText: () => "",
+    /** @param {string} _keybinding @param {string} description */
+    keyHint: (_keybinding, description) => description,
     invalidate: () => {
       /* Static render assertion does not mount a component. */
     },

@@ -2,7 +2,7 @@
 
 ## Current contract
 
-Pi 1.0.0 remains the suggested support floor, not a hard runtime pin. The five declared resources remain four curated Z.AI tools plus the status command. Connections are lazy and paid calls still require the existing user-intent and credential checks. Pi's native MCP feature is not a replacement for these curated tools or their bounded output and cancellation behavior.
+Pi 1.5.0 is the required support floor; host packages remain optional wildcard peers, so it is not a package-manager pin. The dated results below record earlier hosts. The five declared resources remain four curated Z.AI tools plus the status command. Connections are lazy and paid calls still require the existing user-intent and credential checks. Pi's native MCP feature is not a replacement for these curated tools or their bounded output and cancellation behavior.
 
 Service credentials use the explicit Z.AI environment variables first, then the native model registry's provider authentication for `zai`, `zai-coding-cn`, or catalog aliases with Z.AI endpoints. Pi owns credential-command expansion and caching; the extension does not read `auth.json`, execute shell templates, or retain a session context. The missing-key startup warning checks credential availability without resolving a command. Model headers alone do not supply a bearer key for this separate service.
 
