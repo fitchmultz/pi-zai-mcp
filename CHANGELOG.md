@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.11 - 2026-11-02
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Recheck unreported Cursor reviews in automatic releases (#57) ([604b272](https://github.com/fitchmultz/pi-zai-mcp/commit/604b272153351d3a1b5e957e105a678c7cde78e7))
+
+### What's Changed
+
+- Recheck unreported Cursor reviews in automatic releases by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/57
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.10...v0.2.11
+
 ## 0.2.10 - 2026-11-02
 
 <!-- npm-release:unreleased:start -->
