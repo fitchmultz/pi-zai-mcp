@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.12 - 2026-11-03
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Skip no-op releases and restate malformed remediation dispositions (#60) ([2b64cbb](https://github.com/fitchmultz/pi-zai-mcp/commit/2b64cbbb3dcc93cc0e85c214a4713211a3555850))
+
+### What's Changed
+
+- Skip no-op releases and restate malformed remediation dispositions by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/60
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.11...v0.2.12
+
 ## 0.2.11 - 2026-11-02
 
 <!-- npm-release:unreleased:start -->
