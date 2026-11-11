@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.13 - 2026-11-11
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Wake the version workflow only for release events and drop the duplicate main CI run (#62) ([056018f](https://github.com/fitchmultz/pi-zai-mcp/commit/056018fc02829b27226fc25c85defe23d6f85fd1))
+
+### What's Changed
+
+- Wake the version workflow only for release events and drop the duplicate main CI run by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/62
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.12...v0.2.13
+
 ## 0.2.12 - 2026-11-03
 
 <!-- npm-release:unreleased:start -->
