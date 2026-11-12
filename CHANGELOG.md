@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.14 - 2026-11-12
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- ci: align shared automation pins and wire release supersession inputs (#64) ([4dd8e14](https://github.com/fitchmultz/pi-zai-mcp/commit/4dd8e14082174a46f56852cf02f336698d91014c))
+
+### What's Changed
+
+- ci: align shared automation pins and wire release supersession inputs by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/64
+- fix: require patched Node security releases by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/65
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.13...v0.2.14
+
 ## 0.2.13 - 2026-11-11
 
 <!-- npm-release:unreleased:start -->
