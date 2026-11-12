@@ -14,7 +14,7 @@ pi -e .
 
 ## Host compatibility
 
-Pi **1.5.0** or later and Node.js **22.19.0** or later are required. Host runtime packages remain optional wildcard peers rather than hard peer/engines pins, so package managers do not enforce the Pi floor. Required qualification targets are the latest stable official Pi and latest maintained fork `main`, resolving version/commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not validation targets.
+Pi **1.5.0** or later and Node.js **22.23.5** (22.x), **24.22.3** (24.x), or **26.13.1** and newer are required. Host runtime packages remain optional wildcard peers rather than hard peer/engines pins, so package managers do not enforce the Pi floor. Required qualification targets are the latest stable official Pi and latest maintained fork `main`, resolving version/commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not validation targets.
 
 ## Verify this repo
 
