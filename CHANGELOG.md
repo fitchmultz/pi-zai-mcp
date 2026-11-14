@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.15 - 2026-11-14
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- chore(deps): bump hono to 4.13.18 and @hono/node-server to 2.1.8 (#69) ([1b9bac0](https://github.com/fitchmultz/pi-zai-mcp/commit/1b9bac090c7f8fe45225da4008549e5d1838a3a7))
+
+### What's Changed
+
+- chore(deps): bump hono to 4.13.18 and @hono/node-server to 2.1.8 by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/69
+- Raise the Pi floor to 1.5.2 by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/70
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.14...v0.2.15
+
 ## 0.2.14 - 2026-11-12
 
 <!-- npm-release:unreleased:start -->
