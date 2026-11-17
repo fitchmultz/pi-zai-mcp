@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.16 - 2026-11-17
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- ci: release through direct signed version commits (PEA-211) (#72) ([63348a0](https://github.com/fitchmultz/pi-zai-mcp/commit/63348a074d8a930dc538dc05813d2a6fc27154be))
+
+### What's Changed
+
+- ci: release through direct signed version commits (PEA-211) (1/1) by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/72
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.15...v0.2.16
+
 ## 0.2.15 - 2026-11-14
 
 <!-- npm-release:unreleased:start -->
