@@ -65,9 +65,9 @@
     "@earendil-works/pi-tui": "1.5.2",
     "@types/node": "^24.13.3",
     "oxc-parser": "0.153.0",
-    "oxfmt": "0.72.0",
-    "oxlint": "1.87.0",
-    "oxlint-tsgolint": "7.0.2003",
+    "oxfmt": "0.79.0",
+    "oxlint": "1.94.0",
+    "tsrs": "7.1.0-beta.tsrs2",
     "typebox": "1.4.3",
     "typescript": "^7.0.0"
   },

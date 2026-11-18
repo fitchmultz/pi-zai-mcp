@@ -284,7 +284,7 @@ await test("language scope: unsafe unchecked import retains consumer-side semant
   compareLint(
     lint(root, [file, boundary]),
     root,
-    [finding("typescript(no-unsafe-assignment)", file, 2, 23)],
+    [finding("typescript(no-unsafe-assignment)", file, 2, 7)],
     2,
   );
   const compiler = run(tsc, ["--noEmit", "--pretty", "false"], root);

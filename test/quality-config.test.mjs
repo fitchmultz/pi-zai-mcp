@@ -88,7 +88,7 @@ values.forEach((value) => { value.run(); });`,
       finding("typescript(no-unsafe-member-access)", 2, 35),
     ],
   ),
-  // ponytail: Oxlint 1.87/tsgolint 7.0.2003 falsely rejects ReadonlyMap primitives.
+  // ponytail: Oxlint 1.94/tsrs 7.1.0-beta.tsrs2 still rejects ReadonlyMap primitives.
   // Readonly<ReadonlyMap<...>> works, but also accepts mutable maps/nested values;
   // do not call that wrapper deep immutability. Requalify on a checker upgrade.
   probe(
@@ -465,7 +465,7 @@ await test("quality config: narrowly explained checker and validator exceptions"
         '  const value = JSON.parse("{}");\n  console.log(value.label);\n  return operation();',
       ),
       [
-        finding("typescript(no-unsafe-assignment)", 6, 17),
+        finding("typescript(no-unsafe-assignment)", 6, 9),
         finding("typescript(no-unsafe-member-access)", 7, 21),
       ],
     ),
