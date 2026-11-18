@@ -307,7 +307,7 @@ export default defineConfig({
     "unicorn/consistent-function-scoping": "off",
     "unicorn/no-array-sort": "off",
     "unicorn/no-array-reverse": "off",
-    // ponytail: Oxlint 1.87 does not recognize node:test or Node assertions; these guard Vitest forms only. Requalify when native support lands.
+    // ponytail: Oxlint 1.94 does not recognize node:test or Node assertions; these guard Vitest forms only. Requalify when native support lands.
     "vitest/expect-expect": [
       "error",
       {
