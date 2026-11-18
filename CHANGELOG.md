@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.17 - 2026-11-18
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- chore(quality): adopt tsrs@7.1.0-beta.tsrs2 and bump oxlint/oxfmt (#73) ([23a1e0e](https://github.com/fitchmultz/pi-zai-mcp/commit/23a1e0ef7980dd7616501f1742987ea03097e77e))
+
+### What's Changed
+
+- chore(quality): adopt tsrs@7.1.0-beta.tsrs2 and bump oxlint/oxfmt by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/73
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.16...v0.2.17
+
 ## 0.2.16 - 2026-11-17
 
 <!-- npm-release:unreleased:start -->
