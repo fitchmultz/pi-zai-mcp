@@ -6,7 +6,7 @@
   "author": "Mitch Fultz (https://github.com/fitchmultz)",
   "license": "MIT",
   "engines": {
-    "node": ">=22.23.5 <23 || >=24.22.3 <25 || >=26.13.1"
+    "node": ">=24.22.3 <25 || >=26.13.1"
   },
   "keywords": [
     "pi-package",
@@ -60,9 +60,9 @@
     "@z_ai/mcp-server": "0.1.5"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "1.5.2",
-    "@earendil-works/pi-coding-agent": "1.5.2",
-    "@earendil-works/pi-tui": "1.5.2",
+    "@earendil-works/pi-ai": "1.6.0",
+    "@earendil-works/pi-coding-agent": "1.6.0",
+    "@earendil-works/pi-tui": "1.6.0",
     "@types/node": "^24.13.3",
     "oxc-parser": "0.153.0",
     "oxfmt": "0.79.0",
