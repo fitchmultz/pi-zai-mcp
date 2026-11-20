@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.18 - 2026-11-20
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- chore: raise Pi floor to 1.6.0 and drop Node 22 support (PEA-222) (#74) ([4b3fe21](https://github.com/fitchmultz/pi-zai-mcp/commit/4b3fe21953aeefe3894a4057ff6ca56f91521272))
+
+### What's Changed
+
+- chore: bump Pi floor to 1.6.0 and drop Node 22 (PEA-222) by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/74
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.17...v0.2.18
+
 ## 0.2.17 - 2026-11-18
 
 <!-- npm-release:unreleased:start -->
