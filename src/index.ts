@@ -125,10 +125,11 @@ export function registerZaiMcpServers(
   }
   registerConfiguredTools(pi, servers);
   // Only resources in the live session receive session_start; a host may load and drop others.
-  let removeActiveServers: (() => void) | undefined;
+  // A host may also bind multiple sessions to one loaded extension instance, so track per session.
+  const activeSessions = new Map<object, () => void>();
   pi.on("session_start", (_event, ctx) => {
-    removeActiveServers?.();
-    removeActiveServers = addActiveServers(ctx.sessionManager, servers);
+    activeSessions.get(ctx.sessionManager)?.();
+    activeSessions.set(ctx.sessionManager, addActiveServers(ctx.sessionManager, servers));
     warnOnceIfMissingApiKey(
       ctx.sessionManager,
       () => hasApiKeySource(ctx.modelRegistry),
@@ -151,12 +152,15 @@ export function registerZaiMcpServers(
       );
     }
   });
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, ctx) => {
+    const removeActiveServers = activeSessions.get(ctx.sessionManager);
+    activeSessions.delete(ctx.sessionManager);
     try {
-      await closeServers(servers);
+      if (activeSessions.size === 0) {
+        await closeServers(servers);
+      }
     } finally {
       removeActiveServers?.();
-      removeActiveServers = undefined;
     }
   });
 }

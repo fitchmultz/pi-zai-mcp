@@ -1196,3 +1196,94 @@ await test("trusted project disabling a service omits it from status after trust
   );
   assert.deepStrictEqual(bound.errors, []);
 });
+
+await test("sessions sharing one loaded services instance keep independent status and close servers on last shutdown", async (t) => {
+  initTheme("dark", false);
+  const fixture = await createFixture(t);
+  const http = await searchFixture(t);
+  process.env.Z_AI_API_KEY = "local-fixture-key";
+  const modelRuntime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: null,
+    modelsStorePath: join(fixture.agentDir, `models-store-${++modelStoreCounter}.json`),
+    allowModelNetwork: false,
+  });
+  const services = await createAgentSessionServices({
+    cwd: fixture.root,
+    agentDir: fixture.agentDir,
+    modelRuntime,
+    settingsManager: SettingsManager.inMemory(),
+    resourceLoaderOptions: {
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      additionalExtensionPaths: [PACKAGE_ROOT],
+    },
+  });
+  const bindFromSharedServices = async () => {
+    const { session } = await createAgentSessionFromServices({
+      services,
+      sessionManager: SessionManager.inMemory(fixture.root),
+      noTools: "builtin",
+    });
+    /** @type {string[]} */
+    const notifications = [];
+    /** @type {unknown[]} */
+    const errors = [];
+    await session.bindExtensions({
+      mode: "rpc",
+      onError: /** @param {unknown} error */ (error) => {
+        errors.push(error);
+      },
+      uiContext: {
+        ...session.extensionRunner.createContext().ui,
+        notify: (text) => {
+          notifications.push(text);
+        },
+      },
+    });
+    let closed = false;
+    const close = async () => {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+      session.dispose();
+    };
+    t.after(close);
+    return { session, notifications, errors, close };
+  };
+  const first = await bindFromSharedServices();
+  const second = await bindFromSharedServices();
+  assert.deepStrictEqual(
+    (await readStatusEntries(first.session, first.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+    "binding a second session to shared services does not clear the first session's status",
+  );
+  assert.deepStrictEqual(
+    (await readStatusEntries(second.session, second.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+  );
+  await first.close();
+  assert.deepStrictEqual(getActiveServers(first.session.sessionManager), []);
+  assert.deepStrictEqual(
+    (await readStatusEntries(second.session, second.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+    "shutting down the first shared-services session preserves the second session's status",
+  );
+  const result = await invoke(second.session, "z_ai_search", { query: "after-first-shutdown" });
+  assert.strictEqual(textContent(result), "Local search result");
+  assert.strictEqual(http.terminations(), 0);
+  await second.close();
+  assert.deepStrictEqual(getActiveServers(second.session.sessionManager), []);
+  assert.strictEqual(
+    http.terminations(),
+    1,
+    "closing the last session shuts down and terminates the shared server connection",
+  );
+  assert.deepStrictEqual(first.errors, []);
+  assert.deepStrictEqual(second.errors, []);
+});
