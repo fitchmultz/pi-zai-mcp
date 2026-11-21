@@ -175,7 +175,7 @@ src/auth.ts              # native service-key precedence and ordered provider re
 src/register-tool.ts     # typed native Pi tool adapter
 src/tools.ts             # argument projection and bounded result rendering
 src/output.ts            # private saved outputs and bounded MCP text
-src/runtime-state.ts     # shared state for split entrypoints loaded as separate modules
+src/runtime-state.ts     # per-session state shared across split entrypoints loaded as separate modules
 src/servers.ts           # canonical MCP server definitions and legacy env allowlist
 oxlint.config.ts         # strict type-aware lint policy
 package.json             # npm + pi package manifest

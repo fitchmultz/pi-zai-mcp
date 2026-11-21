@@ -1,69 +1,76 @@
 import type { ZaiExtensionAPI } from "./register-tool.ts";
 import type { ManagedServer } from "./servers.ts";
 
-type GlobalState = {
-  activeServers: Set<ManagedServer>;
-  warnedMissingApiKey: boolean;
+// Split resources load as separate module instances, so they share one Pi session's servers
+// here, keyed by that session's sessionManager. Membership follows session_start/session_shutdown.
+type SessionRegistry = {
+  sessions: WeakMap<object, Set<ManagedServer>>;
+  warnedSessions: WeakSet<object>;
 };
 
-const STATE_KEY = Symbol.for("pi-zai-mcp.state");
+const STATE_KEY = Symbol.for("pi-zai-mcp.session-state");
 
-function hasGlobalState(host: object): host is { [STATE_KEY]: GlobalState } {
+function hasSessionRegistry(host: object): host is { [STATE_KEY]: SessionRegistry } {
   return STATE_KEY in host;
 }
 
-function globalState(): GlobalState {
+function sessionRegistry(): SessionRegistry {
   const host: object = globalThis;
-  if (hasGlobalState(host)) {
+  if (hasSessionRegistry(host)) {
     return host[STATE_KEY];
   }
-  const state: GlobalState = {
-    activeServers: new Set<ManagedServer>(),
-    warnedMissingApiKey: false,
+  const state: SessionRegistry = {
+    sessions: new WeakMap<object, Set<ManagedServer>>(),
+    warnedSessions: new WeakSet<object>(),
   };
   Object.defineProperty(host, STATE_KEY, { value: state });
   return state;
 }
 
-export function addActiveServers(servers: readonly ManagedServer[]): () => void {
-  const state = globalState();
+export function addActiveServers(session: object, servers: readonly ManagedServer[]): () => void {
+  const state = sessionRegistry();
+  const active = state.sessions.get(session) ?? new Set<ManagedServer>();
   for (const server of servers) {
-    state.activeServers.add(server);
+    active.add(server);
+  }
+  if (active.size > 0) {
+    state.sessions.set(session, active);
   }
   return () => {
     for (const server of servers) {
-      state.activeServers.delete(server);
+      active.delete(server);
+    }
+    if (state.sessions.get(session) === active && active.size === 0) {
+      state.sessions.delete(session);
     }
   };
 }
 
-export function getActiveServers(): ManagedServer[] {
-  return [...globalState().activeServers];
+export function getActiveServers(session: object): ManagedServer[] {
+  return [...(sessionRegistry().sessions.get(session) ?? [])];
 }
 
-export function warnOnceIfMissingApiKey(hasApiKeySource: () => boolean, warn: () => void): void {
-  const state = globalState();
-  if (state.warnedMissingApiKey || hasApiKeySource()) {
+export function warnOnceIfMissingApiKey(
+  session: object,
+  hasApiKeySource: () => boolean,
+  warn: () => void,
+): void {
+  const state = sessionRegistry();
+  if (state.warnedSessions.has(session) || hasApiKeySource()) {
     return;
   }
-  state.warnedMissingApiKey = true;
+  state.warnedSessions.add(session);
   warn();
-}
-
-export function resetGlobalStateForTests(): void {
-  const state = globalState();
-  state.activeServers.clear();
-  state.warnedMissingApiKey = false;
 }
 
 export function registerStatusCommand(
   pi: Readonly<Pick<ZaiExtensionAPI, "registerCommand">>,
-  getStatusJson: () => string,
+  getStatusJson: (session: object) => string,
 ): void {
   pi.registerCommand("zai-mcp-status", {
     description: "Show configured Z.ai MCP servers and connection status",
     handler: async (_args, ctx) => {
-      const status = getStatusJson();
+      const status = getStatusJson(ctx.sessionManager);
       if (ctx.hasUI) {
         ctx.ui.notify(status, "info");
       } else {

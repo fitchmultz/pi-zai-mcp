@@ -64,6 +64,8 @@ function loadExtension(env = {}, extension = zaiMcpExtension) {
   const tools = [];
   /** @type {Map<string, SmokeCommand>} */
   const commands = new Map();
+  /** @type {((event: unknown, ctx: import("../src/register-tool.ts").SessionLifecycleContext) => Promise<void> | void)[]} */
+  const sessionStartHandlers = [];
   const pi = {
     /** @param {typeof tools[number]} tool */
     registerTool: (tool) => {
@@ -73,14 +75,23 @@ function loadExtension(env = {}, extension = zaiMcpExtension) {
     registerCommand: (name, command) => {
       commands.set(name, command);
     },
-    on: () => () => {
-      /* Lifecycle hooks and unsubscription are exercised by the native runtime owner. */
+    /**
+     * @param {"session_start" | "session_shutdown"} event
+     * @param {(event: unknown, ctx: import("../src/register-tool.ts").SessionLifecycleContext) => Promise<void> | void} handler
+     */
+    on: (event, handler) => {
+      if (event === "session_start") {
+        sessionStartHandlers.push(handler);
+      }
+      return () => {
+        /* Lifecycle hooks and unsubscription are exercised by the native runtime owner. */
+      };
     },
   };
   const warnings = captureWarn(() => {
     extension(pi);
   });
-  return { tools, commands, warnings };
+  return { tools, commands, warnings, sessionStartHandlers };
 }
 
 /** @param {NodeJS.WriteStream} stream @param {() => Promise<void>} fn */
@@ -99,7 +110,6 @@ function patchWrite(stream, fn) {
     });
 }
 
-testHelpers.resetGlobalStateForTests();
 const loaded = loadExtension();
 assert.deepStrictEqual(loaded.tools.map(toolName), [
   "z_ai_search",
@@ -474,8 +484,28 @@ try {
   await rm(commandAgentDir, { recursive: true, force: true });
 }
 
-testHelpers.resetGlobalStateForTests();
 const statusLoaded = loadExtension();
+const sessionManager = {};
+const emptyRegistry = {
+  getAll: () => [],
+  getProviderAuthStatus: () => ({ configured: false }),
+  getProviderAuth: () => Promise.resolve(undefined),
+};
+await Promise.all(
+  statusLoaded.sessionStartHandlers.map((handler) =>
+    Promise.resolve(
+      handler(
+        { type: "session_start" },
+        {
+          hasUI: false,
+          modelRegistry: emptyRegistry,
+          sessionManager,
+          ui: { notify: () => assert.fail("notify should not be used") },
+        },
+      ),
+    ),
+  ),
+);
 const command = statusLoaded.commands.get("zai-mcp-status");
 assert.ok(command !== undefined);
 /** @type {{message: string, type?: string}} */
@@ -483,6 +513,7 @@ let rpcNotification = { message: "" };
 await command.handler("", {
   hasUI: true,
   mode: "rpc",
+  sessionManager,
   ui: {
     notify: (message, type) => {
       rpcNotification = { message, type };
@@ -496,6 +527,7 @@ const jsonOutput = await patchWrite(process.stderr, () =>
   command.handler("", {
     hasUI: false,
     mode: "json",
+    sessionManager,
     ui: { notify: () => assert.fail("notify should not be used") },
   }),
 );
@@ -505,6 +537,7 @@ const printOutput = await patchWrite(process.stdout, () =>
   command.handler("", {
     hasUI: false,
     mode: "print",
+    sessionManager,
     ui: { notify: () => assert.fail("notify should not be used") },
   }),
 );

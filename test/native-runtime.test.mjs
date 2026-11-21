@@ -10,6 +10,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { InMemoryCredentialStore, validateToolArguments } from "@earendil-works/pi-ai";
 import {
   createAgentSession,
+  createAgentSessionFromServices,
+  createAgentSessionServices,
   DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
@@ -311,7 +313,9 @@ async function verifySearch(session, notifications, fixture) {
       ),
     /Missing Z.ai API key/,
   );
-  assert.ok(getActiveServers().every((entry) => entry.connection === undefined));
+  assert.ok(
+    getActiveServers(session.sessionManager).every((entry) => entry.connection === undefined),
+  );
   process.env.Z_AI_API_KEY = "local-fixture-key";
   const result = await search.execute(
     "search-2",
@@ -340,7 +344,7 @@ async function verifySearch(session, notifications, fixture) {
       },
     ],
   );
-  const connected = getActiveServers().find((entry) => entry.id === "search");
+  const connected = getActiveServers(session.sessionManager).find((entry) => entry.id === "search");
   assert.ok(connected !== undefined && connected.connection !== undefined);
   await assert.rejects(
     () =>
@@ -434,7 +438,7 @@ async function verifyPrivateOutput(session) {
 
 /** @param {NativeSession} session */
 function prepareVisionFixture(session) {
-  const owner = getActiveServers().find((entry) => entry.id === "vision");
+  const owner = getActiveServers(session.sessionManager).find((entry) => entry.id === "vision");
   assert.ok(owner !== undefined && owner.args !== undefined);
   owner.args.unshift(
     "--import",
@@ -466,17 +470,26 @@ function invoke(session, name, args, signal, onUpdate) {
   );
 }
 
-/** @param {NativeSession} session @param {readonly string[]} notifications @param {string} [id] */
-async function readServerStatus(session, notifications, id = "search") {
+/** @param {NativeSession} session @param {readonly string[]} notifications */
+async function readStatusEntries(session, notifications) {
   await session.prompt("/zai-mcp-status");
   const json = notifications.at(-1);
   assert.ok(json !== undefined);
-  const entries = /** @type {unknown} */ (JSON.parse(json));
-  assert.ok(Array.isArray(entries));
-  const entry = /** @type {unknown} */ (
-    entries.find(/** @param {unknown} value */ (value) => isRecord(value) && value.id === id)
+  const parsed = /** @type {unknown} */ (JSON.parse(json));
+  assert.ok(Array.isArray(parsed));
+  return parsed.map(
+    /** @param {unknown} entry */ (entry) => {
+      assert.ok(isRecord(entry));
+      return entry;
+    },
   );
-  assert.ok(isRecord(entry));
+}
+
+/** @param {NativeSession} session @param {readonly string[]} notifications @param {string} [id] */
+async function readServerStatus(session, notifications, id = "search") {
+  const entries = await readStatusEntries(session, notifications);
+  const entry = entries.find((value) => value.id === id);
+  assert.ok(entry !== undefined);
   return entry;
 }
 
@@ -492,7 +505,7 @@ async function verifyConnectionRecovery(session, notifications, http) {
   );
   await invoke(session, "z_ai_search", { query: "after-service-error" });
   assert.strictEqual((await readServerStatus(session, notifications)).lastError, undefined);
-  const owner = getActiveServers().find((entry) => entry.id === "search");
+  const owner = getActiveServers(session.sessionManager).find((entry) => entry.id === "search");
   assert.ok(owner?.connection !== undefined);
   await owner.connection.client.close();
   const closed = await readServerStatus(session, notifications);
@@ -524,7 +537,7 @@ async function verifyConnectionRecovery(session, notifications, http) {
 
 /** @param {NativeSession} session */
 async function verifyFailureOutput(session) {
-  const owner = getActiveServers().find((entry) => entry.id === "search");
+  const owner = getActiveServers(session.sessionManager).find((entry) => entry.id === "search");
   assert.ok(owner?.connection !== undefined);
   /** @type {Readonly<Error>[]} */
   const sdkErrors = [];
@@ -864,7 +877,7 @@ async function verifyVisionCancellation(session, fixture, image) {
         ? `OFFLINE_INITIALIZE_STARTED ${process.env.SERVER_NAME}`
         : `OFFLINE_FETCH_STARTED ${marker}`,
     );
-    const owner = getActiveServers().find((entry) => entry.id === "vision");
+    const owner = getActiveServers(session.sessionManager).find((entry) => entry.id === "vision");
     assert.ok(owner?.connection?.transport instanceof StdioClientTransport);
     const pid = owner.connection.transport.pid;
     assert.ok(pid !== null);
@@ -915,7 +928,7 @@ async function verifyReload(session, connected, terminations) {
   assert.strictEqual(terminations(), 1, "reload terminates the connected MCP session");
   assert.ok(connected.connection === undefined, "reload releases the old transport");
   assert.strictEqual(
-    getActiveServers().length,
+    getActiveServers(session.sessionManager).length,
     4,
     "reload releases old registrations, not duplicates",
   );
@@ -1015,9 +1028,262 @@ await test(
       session.dispose();
     }
     assert.deepStrictEqual(
-      getActiveServers(),
+      getActiveServers(session.sessionManager),
       [],
       "native shutdown removes every split resource's state",
     );
   },
 );
+
+const PACKAGE_ROOT = fileURLToPath(new URL("../", import.meta.url));
+let modelStoreCounter = 0;
+
+/**
+ * @param {TestContext} t
+ * @param {Readonly<{
+ *   cwd: string;
+ *   agentDir: string;
+ *   useFileSettings?: boolean;
+ *   additionalExtensionPaths?: readonly string[];
+ *   resolveProjectTrust?: () => Promise<boolean>;
+ * }>} options
+ */
+async function openBoundSession(t, options) {
+  initTheme("dark", false);
+  const settingsManager =
+    options.useFileSettings === true
+      ? SettingsManager.create(options.cwd, options.agentDir, { projectTrusted: false })
+      : SettingsManager.inMemory();
+  const modelRuntime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: null,
+    modelsStorePath: join(options.agentDir, `models-store-${++modelStoreCounter}.json`),
+    allowModelNetwork: false,
+  });
+  const services = await createAgentSessionServices({
+    cwd: options.cwd,
+    agentDir: options.agentDir,
+    modelRuntime,
+    settingsManager,
+    resourceLoaderOptions: {
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      ...(options.additionalExtensionPaths === undefined
+        ? {}
+        : {
+            noExtensions: true,
+            additionalExtensionPaths: [...options.additionalExtensionPaths],
+          }),
+    },
+    resourceLoaderReloadOptions:
+      options.resolveProjectTrust === undefined
+        ? undefined
+        : { resolveProjectTrust: options.resolveProjectTrust },
+  });
+  const { session } = await createAgentSessionFromServices({
+    services,
+    sessionManager: SessionManager.inMemory(options.cwd),
+    noTools: "builtin",
+  });
+  /** @type {string[]} */
+  const notifications = [];
+  /** @type {unknown[]} */
+  const errors = [];
+  await session.bindExtensions({
+    mode: "rpc",
+    onError: /** @param {unknown} error */ (error) => {
+      errors.push(error);
+    },
+    uiContext: {
+      ...session.extensionRunner.createContext().ui,
+      notify: (text) => {
+        notifications.push(text);
+      },
+    },
+  });
+  let closed = false;
+  const close = async () => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+    session.dispose();
+  };
+  t.after(close);
+  return { session, notifications, errors, close };
+}
+
+await test("concurrent SDK sessions isolate status, warnings and shutdown", async (t) => {
+  const fixture = await createFixture(t);
+  await searchFixture(t);
+  const sessionOptions = {
+    cwd: fixture.root,
+    agentDir: fixture.agentDir,
+    additionalExtensionPaths: [PACKAGE_ROOT],
+  };
+  const first = await openBoundSession(t, sessionOptions);
+  const second = await openBoundSession(t, sessionOptions);
+  assert.strictEqual(
+    first.notifications.filter((text) => text.includes("No Z.ai API key found")).length,
+    1,
+    "first session receives one missing-key warning",
+  );
+  assert.strictEqual(
+    second.notifications.filter((text) => text.includes("No Z.ai API key found")).length,
+    1,
+    "second concurrent session receives its own missing-key warning",
+  );
+  assert.deepStrictEqual(
+    (await readStatusEntries(first.session, first.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+  );
+  assert.deepStrictEqual(
+    (await readStatusEntries(second.session, second.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+  );
+  process.env.Z_AI_API_KEY = "local-fixture-key";
+  await invoke(first.session, "z_ai_search", { query: "session-a-only" });
+  const firstSearch = await readServerStatus(first.session, first.notifications, "search");
+  const secondSearch = await readServerStatus(second.session, second.notifications, "search");
+  assert.strictEqual(firstSearch.connected, true);
+  assert.strictEqual(
+    secondSearch.connected,
+    false,
+    "another session's connection does not appear connected in this session's status",
+  );
+  assert.strictEqual(secondSearch.connectionStatus, "lazy_not_connected_until_first_use");
+  await first.close();
+  assert.deepStrictEqual(
+    (await readStatusEntries(second.session, second.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+    "shutting down one session preserves the other session's status entries",
+  );
+  assert.deepStrictEqual(first.errors, []);
+  assert.deepStrictEqual(second.errors, []);
+});
+
+await test("trusted project disabling a service omits it from status after trust bootstrap", async (t) => {
+  const fixture = await createFixture(t);
+  const projectDir = join(fixture.root, "project");
+  await mkdir(join(projectDir, ".pi"), { recursive: true });
+  await writeFile(
+    join(fixture.agentDir, "settings.json"),
+    JSON.stringify({ packages: [PACKAGE_ROOT] }),
+  );
+  await writeFile(
+    join(projectDir, ".pi", "settings.json"),
+    JSON.stringify({
+      packages: [{ source: PACKAGE_ROOT, extensions: ["!extensions/zai-mcp-vision.ts"] }],
+    }),
+  );
+  const bound = await openBoundSession(t, {
+    cwd: projectDir,
+    agentDir: fixture.agentDir,
+    useFileSettings: true,
+    resolveProjectTrust: async () => true,
+  });
+  assert.deepStrictEqual(bound.session.getActiveToolNames().toSorted(), [
+    "z_ai_reader",
+    "z_ai_search",
+    "z_ai_zread",
+  ]);
+  assert.deepStrictEqual(
+    (await readStatusEntries(bound.session, bound.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread"],
+  );
+  assert.deepStrictEqual(bound.errors, []);
+});
+
+await test("sessions sharing one loaded services instance keep independent status and close servers on last shutdown", async (t) => {
+  initTheme("dark", false);
+  const fixture = await createFixture(t);
+  const http = await searchFixture(t);
+  process.env.Z_AI_API_KEY = "local-fixture-key";
+  const modelRuntime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: null,
+    modelsStorePath: join(fixture.agentDir, `models-store-${++modelStoreCounter}.json`),
+    allowModelNetwork: false,
+  });
+  const services = await createAgentSessionServices({
+    cwd: fixture.root,
+    agentDir: fixture.agentDir,
+    modelRuntime,
+    settingsManager: SettingsManager.inMemory(),
+    resourceLoaderOptions: {
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      additionalExtensionPaths: [PACKAGE_ROOT],
+    },
+  });
+  const bindFromSharedServices = async () => {
+    const { session } = await createAgentSessionFromServices({
+      services,
+      sessionManager: SessionManager.inMemory(fixture.root),
+      noTools: "builtin",
+    });
+    /** @type {string[]} */
+    const notifications = [];
+    /** @type {unknown[]} */
+    const errors = [];
+    await session.bindExtensions({
+      mode: "rpc",
+      onError: /** @param {unknown} error */ (error) => {
+        errors.push(error);
+      },
+      uiContext: {
+        ...session.extensionRunner.createContext().ui,
+        notify: (text) => {
+          notifications.push(text);
+        },
+      },
+    });
+    let closed = false;
+    const close = async () => {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+      session.dispose();
+    };
+    t.after(close);
+    return { session, notifications, errors, close };
+  };
+  const first = await bindFromSharedServices();
+  const second = await bindFromSharedServices();
+  assert.deepStrictEqual(
+    (await readStatusEntries(first.session, first.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+    "binding a second session to shared services does not clear the first session's status",
+  );
+  assert.deepStrictEqual(
+    (await readStatusEntries(second.session, second.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+  );
+  await first.close();
+  assert.deepStrictEqual(getActiveServers(first.session.sessionManager), []);
+  assert.deepStrictEqual(
+    (await readStatusEntries(second.session, second.notifications)).map((entry) => entry.id),
+    ["search", "reader", "zread", "vision"],
+    "shutting down the first shared-services session preserves the second session's status",
+  );
+  const result = await invoke(second.session, "z_ai_search", { query: "after-first-shutdown" });
+  assert.strictEqual(textContent(result), "Local search result");
+  assert.strictEqual(http.terminations(), 0);
+  await second.close();
+  assert.deepStrictEqual(getActiveServers(second.session.sessionManager), []);
+  assert.strictEqual(
+    http.terminations(),
+    1,
+    "closing the last session shuts down and terminates the shared server connection",
+  );
+  assert.deepStrictEqual(first.errors, []);
+  assert.deepStrictEqual(second.errors, []);
+});
