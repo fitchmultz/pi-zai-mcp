@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.20 - 2026-11-21
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- ci: pin shared automation to 788061a and pass RELEASE_APP_PRIVATE_KEY (#77) ([1913eb8](https://github.com/fitchmultz/pi-zai-mcp/commit/1913eb8180fa58da86b9f2f3d255097077b4a8ec))
+
+### What's Changed
+
+- ci: pin shared automation to 788061a and pass RELEASE_APP_PRIVATE_KEY by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/77
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.19...v0.2.20
+
 ## 0.2.19 - 2026-11-21
 
 <!-- npm-release:unreleased:start -->
