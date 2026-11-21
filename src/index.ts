@@ -13,7 +13,6 @@ import {
   addActiveServers,
   getActiveServers,
   registerStatusCommand,
-  resetGlobalStateForTests,
   warnOnceIfMissingApiKey,
 } from "./runtime-state.ts";
 import {
@@ -105,15 +104,15 @@ function registerConfiguredTools(pi: ZaiExtensionAPI, servers: readonly ManagedS
   }
 }
 
-function activeServerStatus() {
+function activeServerStatus(session: object) {
   const order = new Map<ServerId, number>(ALL_SERVER_IDS.map((id, index) => [id, index]));
   return serverStatus(
-    getActiveServers().toSorted((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)),
+    getActiveServers(session).toSorted((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)),
   );
 }
 
 export function registerZaiMcpStatusCommand(pi: ZaiExtensionAPI): void {
-  registerStatusCommand(pi, () => JSON.stringify(activeServerStatus(), null, 2));
+  registerStatusCommand(pi, (session) => JSON.stringify(activeServerStatus(session), null, 2));
 }
 
 export function registerZaiMcpServers(
@@ -124,10 +123,14 @@ export function registerZaiMcpServers(
   if (servers.length === 0) {
     console.warn(`[${EXTENSION_NAME}] no Z.AI MCP servers enabled; no tools registered.`);
   }
-  const removeActiveServers = addActiveServers(servers);
   registerConfiguredTools(pi, servers);
+  // Only resources in the live session receive session_start; a host may load and drop others.
+  let removeActiveServers: (() => void) | undefined;
   pi.on("session_start", (_event, ctx) => {
+    removeActiveServers?.();
+    removeActiveServers = addActiveServers(ctx.sessionManager, servers);
     warnOnceIfMissingApiKey(
+      ctx.sessionManager,
       () => hasApiKeySource(ctx.modelRegistry),
       () => {
         const message = `[${EXTENSION_NAME}] No Z.ai API key found. Set Z_AI_API_KEY/ZAI_API_KEY/ZAI_CODING_CN_API_KEY or use Pi /login for a Z.AI provider. Z.ai MCP tools will fail until configured.`;
@@ -149,8 +152,12 @@ export function registerZaiMcpServers(
     }
   });
   pi.on("session_shutdown", async () => {
-    await closeServers(servers);
-    removeActiveServers();
+    try {
+      await closeServers(servers);
+    } finally {
+      removeActiveServers?.();
+      removeActiveServers = undefined;
+    }
   });
 }
 
@@ -164,7 +171,6 @@ export const testHelpers = {
   connectWith,
   getServiceAuth,
   hasApiKeySource,
-  resetGlobalStateForTests,
   searchArgs,
   truncateForTool,
   visionArgs,

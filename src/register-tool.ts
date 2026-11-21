@@ -8,6 +8,16 @@ import { Type, type TSchema } from "typebox";
 import type { ManagedServer } from "./servers.ts";
 import { renderCuratedResult } from "./tools.ts";
 
+export type SessionLifecycleContext = Readonly<{
+  hasUI: boolean;
+  modelRegistry: Registry;
+  sessionManager: object;
+  ui: Readonly<Pick<ExtensionContext["ui"], "notify">>;
+}>;
+type SessionLifecycleHandler = (
+  event: unknown,
+  ctx: SessionLifecycleContext,
+) => Promise<void> | void;
 export type StatusCommand = Readonly<{
   description: string;
   handler: (
@@ -15,11 +25,14 @@ export type StatusCommand = Readonly<{
     ctx: Readonly<{
       hasUI: boolean;
       mode: ExtensionContext["mode"];
+      sessionManager: object;
       ui: Readonly<Pick<ExtensionContext["ui"], "notify">>;
     }>,
   ) => Promise<void>;
 }>;
-export type ZaiExtensionAPI = Readonly<Pick<ExtensionAPI, "registerTool" | "on">> & {
+export type ZaiExtensionAPI = Readonly<Pick<ExtensionAPI, "registerTool">> & {
+  readonly on: ((event: "session_start", handler: SessionLifecycleHandler) => () => void) &
+    ((event: "session_shutdown", handler: SessionLifecycleHandler) => () => void);
   readonly registerCommand: (name: string, command: StatusCommand) => void;
 };
 export type Registry = Readonly<
