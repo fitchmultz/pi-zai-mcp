@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.19 - 2026-11-21
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- ci: refresh the shared automation pin to 1f78bd6 (PEA-225) (#75) ([0ecb3aa](https://github.com/fitchmultz/pi-zai-mcp/commit/0ecb3aa50ec389851d5d12e72daaa5ac61285860))
+
+### What's Changed
+
+- ci: refresh the shared automation pin to 1f78bd6 (PEA-225) by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/75
+- fix: scope runtime server state and warnings per Pi session by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/76
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.18...v0.2.19
+
 ## 0.2.18 - 2026-11-20
 
 <!-- npm-release:unreleased:start -->
