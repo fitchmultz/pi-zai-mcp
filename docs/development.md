@@ -38,6 +38,8 @@ pi install -l /path/to/pi-zai-mcp
 
 ### Dependency security
 
+**Release-age cooldown (`.npmrc`):** `.npmrc` sets `min-release-age=2` (requiring npm 11.17+ / the repo's pinned `npm@12.2.0`) and exempts `@earendil-works/*` and `@fitchmultz/*`. Exemptions are named-only: transitive dependencies of exempt packages still follow the 2-day window. `npm ci` installs exact locked versions regardless of age. Fresh `npm install` calls for third-party versions younger than 2 days fail with `ETARGET ... with a date before ...` (or resolve an older version for a range). Wait out the window by default; when an urgent security fix must land earlier, pass `--min-release-age=0` for that install command instead of broadening `min-release-age-exclude`.
+
 Audit both the repository's production graph and a fresh npm consumer of
 `npm pack`. The direct SDK floor and scoped vision-server override install SDK
 1.32.1 throughout this repository's locked production graph, and the lockfile
