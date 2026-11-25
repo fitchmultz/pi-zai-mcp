@@ -10,7 +10,6 @@ npm-debug.log*
 # Local env/auth files
 .env
 .env.*
-.npmrc
 
 # CueLoop local/runtime state (do not commit)
 .cueloop/
