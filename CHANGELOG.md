@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.21 - 2026-11-25
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- docs(agents): remove stale live-runtime activation hold from AGENTS.md (#78) ([e029593](https://github.com/fitchmultz/pi-zai-mcp/commit/e0295939467f425e8f9ae6ee4e75d65969176046))
+
+### What's Changed
+
+- docs(agents): remove stale live-runtime activation hold from AGENTS.md by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/78
+- chore: enforce 2-day npm min-release-age cooldown by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/79
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.20...v0.2.21
+
 ## 0.2.20 - 2026-11-21
 
 <!-- npm-release:unreleased:start -->
