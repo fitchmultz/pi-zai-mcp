@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 0.2.23 - 2026-11-27
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- chore: raise Pi floor to 1.7.0 (PEA-240) (#81) ([9f70cfe](https://github.com/fitchmultz/pi-zai-mcp/commit/9f70cfe7fee1db391341da8c539860a224023749))
+
+### What's Changed
+
+- chore: raise Pi floor to 1.7.0 (PEA-240) by @fitchmultz in https://github.com/fitchmultz/pi-zai-mcp/pull/81
+
+**Full Changelog**: https://github.com/fitchmultz/pi-zai-mcp/compare/v0.2.22...v0.2.23
+
 ## 0.2.22 - 2026-11-25
 
 <!-- npm-release:unreleased:start -->
